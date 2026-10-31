@@ -378,6 +378,36 @@ constant 1.0, a fresh starter layer contributes alpha, and existing starter grou
 
 ---
 
+## T-14 — Starter group normal is a neutral map
+
+**FR:** FR-31 (amended 2026-10-31) · **Depends on:** T-10, T-13
+
+A fresh, otherwise empty custom layer warped the shading. The starter group fed its `Normal`
+output from the same-named input, but a `CUSTOM` normal channel is a tangent-space normal map
+(`subtree.py` adds a `ShaderNodeNormalMap`, like `NOISE`): the below-layers *world-space* normal
+stream was transformed twice, once by the `Normal Map` node and once by the normal blend. Setting
+the normal blend to 0 removed the warp, which pointed at the layer normal contribution.
+
+- In `custom_node_common.create_starter_group`: keep the `Normal` input (FR-6 still feeds it the
+  below-layers stream), but feed the `Normal` output from a constant neutral tangent-space normal
+  map `(0.5, 0.5, 1.0)` instead of the input. Use `ShaderNodeCombineXYZ` (exists in every supported
+  build) rather than 5.x's `FunctionNodeInputVector`.
+- Do not modify existing starter groups and add no `versioning.py` block, for the FR-32 reason in
+  T-13.
+- Update `TestCustomStarterGroup.test_01` for the new `Normal` output and add
+  `test_01b_normal_output_is_neutral_map_in_the_layer_chain`, which asserts the layer tree's
+  `Normal Map` node is fed by the source and the source's `Normal` output is the neutral constant,
+  while the source's `Normal` input still receives `Start.Normal`. Update
+  `acceptance_5_2_3.py::check_02` for the same shape.
+
+**Verify:** the updated tests pass headlessly; the `Normal` output is not a pass-through, and a
+fresh starter layer over a normal-enabled stack does not warp the shading.
+
+**Done when:** a newly created starter group has a neutral `Normal` output, its `Normal` input is
+still wired, and existing starter groups are unchanged.
+
+---
+
 ## Follow-ups
 
 *Appended by T-11 and by any task that discovers out-of-scope work. Nothing here is promised.*

@@ -203,8 +203,12 @@ FR-10 binding fallback instead of growing a socket. The starter group is a pass-
 `Vector` input and an `Alpha` output, so a fresh layer's channels follow whatever is below. `Alpha`
 has no same-named input: it is fed by a constant `ShaderNodeValue` at 1.0, so a fresh layer is
 opaque instead of forwarding a transparent below-layers stream, and no `Color Alpha` input is
-declared. Spec FR-31 was amended on 2026-10-30 to this shape; that correction is T-13 in the spec's
-`tasks.md`. Existing starter groups are deliberately not migrated (FR-32).
+declared. `Normal` is the other exception: a custom layer's `Normal` output is a tangent-space
+normal map (the layer tree adds a `Normal Map` node), so the output is a constant neutral map
+`(0.5, 0.5, 1.0)` rather than a pass-through of the world-space below-layers stream, which would be
+transformed twice. The `Normal` input is still declared and fed (FR-6). Spec FR-31 was amended on
+2026-10-30 (alpha) and 2026-10-31 (normal) to this shape; those corrections are T-13 and T-14 in
+the spec's `tasks.md`. Existing starter groups are deliberately not migrated (FR-32).
 `make_group_unique` is the explicit deep copy behind the layer panel's *Make Unique* (FR-8/FR-17):
 it copies the referenced tree, repoints `layer.custom_group` and the source node through the same
 `set_custom_layer_group` relink path (stale input links cleared, channel bindings preserved, yp re-spliced),

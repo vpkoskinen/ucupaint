@@ -2907,23 +2907,104 @@ class TestCustomStarterGroup(CustomNodeTestBase):
                 self.assertEqual(entries[(in_out, root_ch.name)].socket_type, expected)
         self.assertEqual(entries[('INPUT', 'Vector')].socket_type, 'NodeSocketVector')
 
-        # Every channel output is linked from its same-named input; Alpha comes from a value node.
+        # Every channel output is linked from its same-named input; Alpha comes from a value node
+        # and Normal from a neutral tangent-space normal map (a pass-through would be transformed
+        # twice by the layer tree's Normal Map node).
+        normal_name = next(ch.name for ch in yp.channels if ch.special_type == 'NORMAL')
         group_input = next(n for n in group.nodes if n.type == 'GROUP_INPUT')
         group_output = next(n for n in group.nodes if n.type == 'GROUP_OUTPUT')
         for outp in group_output.inputs:
             self.assertEqual(len(outp.links), 1, 'output %r is not fed once' % outp.name)
+            source = outp.links[0].from_node
             if outp.name == 'Alpha':
                 # FR-31: Alpha is a constant 1.0, never a group input.
-                source = outp.links[0].from_node
                 self.assertEqual(source.type, 'VALUE',
                                  'Alpha is not fed from a value node')
                 self.assertEqual(source.outputs[0].default_value, 1.0)
+            elif outp.name == normal_name:
+                # FR-31: a neutral map, never the below-layers Normal stream.
+                self.assertEqual(source.type, 'COMBXYZ',
+                                 'Normal is not fed from a constant vector')
+                self.assertEqual(tuple(socket.default_value for socket in source.inputs),
+                                 (0.5, 0.5, 1.0),
+                                 'Normal is not the neutral tangent-space map')
+                self.assertNotEqual(outp.links[0].from_socket,
+                                    group_input.outputs[outp.name])
             else:
                 self.assertEqual(outp.links[0].from_socket,
                                  group_input.outputs[outp.name])
 
         # FR-31: every channel binds to the same-named output.
         self.assertEqual([ch.socket_input_name for ch in layer.channels], channel_names)
+
+    def test_01b_normal_output_is_neutral_map_in_the_layer_chain(self):
+        # Regression for the 2026-10-31 report: a fresh starter layer warped the shading. A
+        # CUSTOM layer's Normal output is a tangent-space normal map, so a pass-through of the
+        # below-layers (world-space) Normal stream was transformed twice by the Normal Map node.
+        layer = self.starter_layer()
+        yp = self.get_yp()
+        normal_index = [ch.name for ch in yp.channels].index('Normal')
+        layer.channels[normal_index].enable = True
+        tree = self.get_layer_tree(layer)
+        input_outputs.check_all_layer_channel_io_and_nodes(layer, tree)
+        node_connections.reconnect_layer_nodes(layer)
+
+        source = self.get_layer_source(layer)
+        normal_proc = tree.nodes.get(layer.channels[normal_index].normal_proc)
+        self.assertIsNotNone(normal_proc, 'the normal channel has no Normal Map node')
+        self.assertEqual(normal_proc.type, 'NORMAL_MAP')
+        self.assertEqual(len(normal_proc.inputs['Color'].links), 1,
+                         'the Normal Map node is not fed by the source')
+        self.assertEqual(normal_proc.inputs['Color'].links[0].from_socket,
+                         source.outputs['Normal'])
+
+        # The group's Normal input still receives the below-layers stream (FR-6) ...
+        start = tree.nodes[common.TREE_START]
+        self.assertEqual(len(source.inputs['Normal'].links), 1)
+        self.assertEqual(source.inputs['Normal'].links[0].from_socket, start.outputs['Normal'])
+
+        # ... but the group's Normal output is the neutral map, never that stream.
+        group_output = next(n for n in layer.custom_group.nodes if n.type == 'GROUP_OUTPUT')
+        neutral = group_output.inputs['Normal'].links[0].from_node
+        self.assertEqual(neutral.type, 'COMBXYZ',
+                         'the starter Normal output is not a constant vector')
+        self.assertEqual(tuple(socket.default_value for socket in neutral.inputs),
+                         (0.5, 0.5, 1.0),
+                         'the starter Normal output is not the neutral tangent-space map')
+
+    def test_01c_fresh_starter_layer_does_not_warp_normals(self):
+        # The shading regression the neutral map fixes: turn the cube so the camera sees a face
+        # whose geometry normal is not the neutral map's (0,0,1). A pass-through of that normal
+        # would be transformed twice by the Normal Map node and change the render.
+        from mathutils import Vector
+        camera = bpy.context.scene.camera
+        direction = Vector(camera.location).normalized()
+        self.obj.rotation_euler = direction.to_track_quat('Z', 'Y').to_euler()
+        bpy.context.view_layer.update()
+
+        layer = self.starter_layer()
+        yp = self.get_yp()
+        normal_index = [ch.name for ch in yp.channels].index('Normal')
+        layer.channels[normal_index].enable = True
+        tree = self.get_layer_tree(layer)
+        input_outputs.check_all_layer_channel_io_and_nodes(layer, tree)
+        node_connections.reconnect_layer_nodes(layer)
+        node_connections.reconnect_yp_nodes(layer.id_data)
+
+        restore = self.render_settings()
+        try:
+            on = self.render_center_pixel('custom_starter_normal_on.png')
+            layer.enable = False
+            off = self.render_center_pixel('custom_starter_normal_off.png')
+        finally:
+            layer.enable = True
+            restore()
+
+        tolerance = 2.0 / 255.0
+        for i in range(3):
+            self.assertLessEqual(abs(on[i] - off[i]), tolerance,
+                                 'starter layer warped the normals: on=%r off=%r'
+                                 % (on, off))
 
     def test_02_renders_as_below(self):
         bpy.ops.wm.y_new_layer(name='Below', type='COLOR',

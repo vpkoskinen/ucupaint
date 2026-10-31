@@ -241,15 +241,26 @@ render is unchanged and the input link still exists.
 group. A starter group is a new `ShaderNodeTree` containing one input and one output socket per
 current root channel (names exactly the channel names, plus a `Vector` input), wired pass-through
 (each channel output fed from the same-named input), so a fresh custom layer initially shows what
-is below. The `Alpha` output is the one exception: it is fed from a constant value node at **1.0**,
-never from an input, so a fresh layer is opaque and its output actually contributes. The group
-declares **no** `Color Alpha` input. *(amended 2026-10-30 — see [`## Changes`](#changes). Existing
-starter groups are not migrated: FR-32 makes the tree user-owned after creation.)*
+is below. `Alpha` and `Normal` are the exceptions:
+
+- `Alpha` is fed from a constant value node at **1.0**, never from an input, so a fresh layer is
+  opaque and its output actually contributes.
+- `Normal` is fed from a constant neutral tangent-space normal map `(0.5, 0.5, 1.0)`, never from
+  the `Normal` input. A custom layer's `Normal` output is interpreted as a tangent-space normal map
+  (the layer tree puts it through a `Normal Map` node), so passing the below-layers normal stream
+  through would transform it twice and warp the shading. The `Normal` input is still declared and
+  fed with the below-layers stream (FR-6), so the user can build on it.
+
+The group declares **no** `Color Alpha` input. *(amended 2026-10-30 and 2026-10-31 — see
+[`## Changes`](#changes). Existing starter groups are not migrated: FR-32 makes the tree user-owned
+after creation.)*
 *Verification:* `wm.y_new_layer(type='CUSTOM', create_new_group=True, group_name='X')` produces a
 tree whose inputs are exactly one per `yp.channels` entry plus `Vector`, whose outputs are exactly
-one per channel plus `Alpha`, where each channel output has one link from its same-named input and
-`Alpha` has one link from a value node whose value is 1.0; every channel binds to the same-named
-output, and a fresh layer renders its colour at alpha 1.0 (film-transparent render, `A` channel).
+one per channel plus `Alpha`, where each channel output has one link from its same-named input
+except `Normal` (one link from a constant vector `(0.5, 0.5, 1.0)`) and `Alpha` (one link from a
+value node whose value is 1.0); every channel binds to the same-named output, and a fresh layer
+renders its colour at alpha 1.0 (film-transparent render, `A` channel) without changing the
+shading normals.
 
 **FR-32** A starter group is written exactly once, at creation. Afterwards it is a user tree:
 ucupaint never adds, removes or renames sockets in it, on channel add/remove/rename or on any sync.
@@ -428,6 +439,21 @@ default recommended in §7:
 
 Not changed by these answers: non-goals, the socket contract, live re-sync requirements, and the
 bake verification tolerances.
+
+### 2026-10-31 — starter group normal is a neutral map (FR-31, amended)
+
+As shipped, the starter group fed its `Normal` output from the same-named input. A custom layer's
+`Normal` output is a tangent-space normal map — `subtree.py` creates a `ShaderNodeNormalMap` for a
+`CUSTOM` normal channel, like `NOISE` — so that pass-through fed the below-layers *world-space*
+normal stream into the `Normal Map` node and transformed it twice. A fresh, otherwise empty custom
+layer therefore warped the shading; setting the normal blend to 0 removed it.
+
+Amended at the user's report: the starter group's `Normal` output is now fed from a constant
+neutral tangent-space normal map `(0.5, 0.5, 1.0)`, which is the identity for a normal map. The
+`Normal` input is still declared and receives the below-layers stream (FR-6), so a user can wire
+it deliberately (adding their own `Normal Map` node where needed). Existing starter groups are not
+migrated for the same FR-32 reason as the alpha amendment: the tree is user-owned after creation,
+so a user edits an old starter by hand.
 
 ### 2026-10-30 — implementation record (branch `customnodes`)
 

@@ -34,7 +34,7 @@ rename misbehaves.
 | `get_custom_input_names(group)` | Names of inputs that match a channel or are `Vector` (FR-6/FR-7), used by wiring and by arrangements. |
 | `get_custom_interface_signature(group)` | `((in_out, name, socket_type, enabled), …)`, version-safe across the pre-4.0 and 4.0+ interface APIs. `None`-safe: a missing group has a defined empty signature. |
 | `sync_custom_layers(yp)` | FR-11 to FR-13 entry point: compare signatures, and for changed groups re-bind channels (`socket_input_name` fallback), then `reconnect_layer_nodes` + `rearrange_layer_nodes` per affected layer with `yp.halt_update`/`halt_reconnect` guarding. |
-| `create_starter_group(yp, name)` | FR-31. Builds Start/End, one pass-through pair per root channel, `Vector` in, `Alpha` out fed by a constant 1.0 value node. Writes the tree exactly once. *(Amended 2026-10-30: no `Color Alpha` input — see spec `## Changes` and tasks T-13.)* |
+| `create_starter_group(yp, name)` | FR-31. Builds Start/End, one pass-through pair per root channel, `Vector` in, `Alpha` out fed by a constant 1.0 value node, `Normal` out fed by a constant neutral normal map `(0.5, 0.5, 1.0)`. Writes the tree exactly once. *(Amended 2026-10-30: no `Color Alpha` input — see spec `## Changes` and tasks T-13. Amended 2026-10-31: `Normal` is a neutral map, not a pass-through — see tasks T-14.)* |
 | `make_group_unique(layer)` | FR-8/FR-17. Copies the tree, repoints the layer, re-syncs. |
 | `get_custom_layer_warning(layer)` | Derived (not stored) state for the UI: missing group, no compatible outputs, invalid binding. |
 

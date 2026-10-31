@@ -353,15 +353,23 @@ def check_02_starter_passthrough_and_channel_add():
         assert inputs == channel_names + ['Vector'], 'starter inputs: %r' % (inputs,)
         assert outputs == channel_names + ['Alpha'], 'starter outputs: %r' % (outputs,)
 
+        normal_name = next(root_ch.name for root_ch in yp.channels
+                           if root_ch.special_type == 'NORMAL')
         group_input = next(n for n in group.nodes if n.type == 'GROUP_INPUT')
         group_output = next(n for n in group.nodes if n.type == 'GROUP_OUTPUT')
         for outp in group_output.inputs:
-            assert len(outp.links) == 1, 'starter output %r is not pass-through' % outp.name
+            assert len(outp.links) == 1, 'starter output %r is not fed once' % outp.name
+            source = outp.links[0].from_node
             if outp.name == 'Alpha':
                 # FR-31 as amended: Alpha is a constant 1.0 from a value node, not a group input.
-                source = outp.links[0].from_node
                 assert source.type == 'VALUE', 'Alpha is not fed from a value node'
                 assert source.outputs[0].default_value == 1.0, 'Alpha value is not 1.0'
+            elif outp.name == normal_name:
+                # FR-31 as amended: Normal is a neutral tangent-space map, not the below stream.
+                assert source.type == 'COMBXYZ', 'Normal is not fed from a constant vector'
+                assert tuple(s.default_value for s in source.inputs) == (0.5, 0.5, 1.0), \
+                    'Normal is not the neutral tangent-space map'
+                assert outp.links[0].from_socket != group_input.outputs[outp.name]
             else:
                 assert outp.links[0].from_socket == group_input.outputs[outp.name]
 

@@ -94,18 +94,20 @@ def create_starter_group(yp, name):
     # Shape: Group Input / Group Output with one input+output pair per current root channel (names
     # exactly the channel names), plus a `Vector` input (FR-7), and an `Alpha` output (FR-5,
     # reserved). Every channel output is linked from the same-named input, so a layer created from
-    # it renders whatever is below. `Alpha` is the one exception: it has no same-named input and is
-    # fed from a constant `ShaderNodeValue` at 1.0, so a fresh layer is opaque and its output
-    # actually contributes. No `Color Alpha` input is declared. (`Color Alpha` handling for *user*
-    # groups, FR-6, is unaffected.)
+    # it renders whatever is below. `Alpha` and `Normal` are the exceptions: `Alpha` has no
+    # same-named input and is fed from a constant `ShaderNodeValue` at 1.0, so a fresh layer is
+    # opaque and its output actually contributes; `Normal` is fed from a constant neutral normal
+    # map, because a CUSTOM layer's `Normal` output is a tangent-space normal map (see the wiring
+    # below). No `Color Alpha` input is declared. (`Color Alpha` handling for *user* groups, FR-6,
+    # is unaffected.)
     if yp is None: return None
 
     name = (name or '').strip() or 'Custom Node Layer'
     tree = bpy.data.node_groups.new(get_unique_name(name, bpy.data.node_groups), 'ShaderNodeTree')
 
-    # Presentation: one frame holding the three essential nodes (Group Input, Group Output and the
-    # Alpha value node), so opening the group in the node editor shows a labelled pass-through
-    # instead of three nodes floating at the origin.
+    # Presentation: one frame holding the essential nodes (Group Input, Group Output and the two
+    # constants), so opening the group in the node editor shows a labelled pass-through instead of
+    # nodes floating at the origin.
     frame = tree.nodes.new('NodeFrame')
     frame.label = 'Starter Group (pass-through)'
     frame.location = (-600, 300)
@@ -139,24 +141,43 @@ def create_starter_group(yp, name):
         add_output(root_ch.name, _starter_socket_type(root_ch, 'OUTPUT'))
     add_output('Alpha', 'NodeSocketFloatFactor')
 
-    # Pass-through: each channel output fed from the input of the same name. Wired through
-    # `node_connections.create_link`, the add-on's only link creator, like every other tree.
+    # Pass-through: each channel output fed from the input of the same name, except `Normal`.
+    # A CUSTOM layer's `Normal` output is a tangent-space normal map: the layer tree puts it
+    # through a `ShaderNodeNormalMap` (subtree.py, like NOISE). Feeding the below-layers normal
+    # stream through that node transforms it twice and visibly warps the shading, so the starter's
+    # `Normal` output is a constant neutral map (0.5, 0.5, 1.0) instead. Its same-named input is
+    # still declared and fed (FR-6), so a user can build on the below-layers stream themselves.
+    # Wired through `node_connections.create_link`, the add-on's only link creator.
     from .node_connections import create_link
+    normal_out_name = next((root_ch.name for root_ch in yp.channels
+                            if root_ch.special_type == 'NORMAL'), None)
     alpha_output = group_output.inputs.get('Alpha')
     for outp in group_output.inputs:
-        if outp.name == 'Alpha': continue
+        if outp.name in {'Alpha', normal_out_name}: continue
         inp = group_input.outputs.get(outp.name)
         if inp is not None:
             create_link(tree, inp, outp)
 
-    # FR-31: `Alpha` is a constant 1.0, not a pass-through, so a fresh layer is opaque. The value
-    # node lives inside the frame with the other two nodes so the starter stays one presented unit.
+    # FR-31: `Alpha` is a constant 1.0, not a pass-through, so a fresh layer is opaque.
     if alpha_output is not None:
         value = tree.nodes.new('ShaderNodeValue')
         value.parent = frame
         value.location = (300, -100)
         value.outputs[0].default_value = 1.0
         create_link(tree, value.outputs[0], alpha_output)
+
+    # FR-31: the neutral normal map that makes a fresh starter layer a no-op for normals.
+    normal_output = group_output.inputs.get(normal_out_name) if normal_out_name else None
+    if normal_output is not None:
+        # `ShaderNodeCombineXYZ` rather than 5.x's `FunctionNodeInputVector`: the fork supports
+        # Blender 4.2 LTS, and Combine XYZ exists in every supported build.
+        neutral_normal = tree.nodes.new('ShaderNodeCombineXYZ')
+        neutral_normal.parent = frame
+        neutral_normal.label = 'Neutral Normal'
+        neutral_normal.location = (100, -100)
+        for socket_name, value in (('X', 0.5), ('Y', 0.5), ('Z', 1.0)):
+            neutral_normal.inputs[socket_name].default_value = value
+        create_link(tree, neutral_normal.outputs[0], normal_output)
 
     return tree
 

@@ -36,7 +36,7 @@ operators and predicates; they do not import `tests/test_custom_node.py`. Render
 | §6 | Checklist item | Verdict | Evidence |
 |---|---|---|---|
 | 1 | Add Layer → Custom Node offers a group picker; internal `~yPL` and layer trees absent | **PASS** | `get_custom_group_candidates()` with one suitable, one `~yPL `, one `.yP Layer ` and one shader-only group returned exactly `['AccSuitable']`; the real picker draw (`ui.draw_custom_group_picker`) offered `['Generate Starter Group', 'AccSuitable']` and none of the excluded trees. |
-| 2 | Same menu generates a starter group; pass-through; adding a root channel leaves its sockets untouched (FR-31/32) | **PASS** | Starter inputs `[Color, Metallic, Roughness, Height, Normal, Vector]` (no `Color Alpha`), outputs `[Color, Metallic, Roughness, Height, Normal, Alpha]`; every channel output fed from its same-named input, `Alpha` fed from a `ShaderNodeValue` at 1.0; render on/off `[0.102, 0.455, 0.0]` both; interface signature unchanged after `y_add_new_ypaint_channel`. |
+| 2 | Same menu generates a starter group; pass-through; adding a root channel leaves its sockets untouched (FR-31/32) | **PASS** | Starter inputs `[Color, Metallic, Roughness, Height, Normal, Vector]` (no `Color Alpha`), outputs `[Color, Metallic, Roughness, Height, Normal, Alpha]`; every channel output fed from its same-named input, `Alpha` fed from a `ShaderNodeValue` at 1.0; render on/off `[0.102, 0.455, 0.0]` both; interface signature unchanged after `y_add_new_ypaint_channel`. *(The `Normal` output was amended on 2026-10-31, T-14; see the re-run note below.)* |
 | 3 | A fresh starter group is opaque by default: no alpha input, `Alpha` a constant 1.0 (FR-31 as amended) | **PASS** | Over a transparent custom layer below, film-transparent render with the yp alpha wired to the BSDF: centre pixel `[0.024, 0.024, 0.024, 1.000]` (RGB stable within 2/255 between runs; the layer is black over a transparent below stream, so only `A` matters), `A = 1.000` (a `ShaderNodeValue` at 1.0 feeds the group's `Alpha`; pre-T-13 this pixel was `A = 0`). |
 | 4 | Color + Roughness group renders; each channel binds to the same-named output | **PASS** | `channels[Color].socket_input_name == 'Color'`, `channels[Roughness] == 'Roughness'`; centre pixel `[0.573, 0.035, 0.0]` (the group's red constant). |
 | 5 | Channel source menu lists the group's outputs and nothing shader-typed | **PASS** | Group with `Color`, `Rough`, `Shader`: `get_available_source_outputs` → `['Color', 'Rough']`; the real `YLayerChannelInputMenu.draw` produced menu entries `['Color', 'Rough']`. |
@@ -61,6 +61,13 @@ operators and predicates; they do not import `tests/test_custom_node.py`. Render
 Row numbers are the item numbers in [`spec.md`](spec.md) §6. Items 11–15 were added to §6 after
 this run (T-12/T-13 and the P1 fixes); their verdicts rest on `tests/test_custom_node.py`, not on
 this run, and each row names the test rather than inventing a manual observation.
+
+**2026-10-31 re-run (T-14, FR-31 normal amendment).** `check_02` was updated for the neutral
+`Normal` output and the full script was run again on the same build: **L2 PASS**, inputs
+`[Color, Metallic, Roughness, Height, Normal, Vector]`, outputs `[Color, Metallic, Roughness,
+Height, Normal, Alpha]`, `Normal` fed by a constant vector `(0.5, 0.5, 1.0)`, `Alpha` by a
+`ShaderNodeValue` at 1.0, render on/off `[0.102, 0.455, 0.0]` both, interface signature unchanged.
+The required suites were green: `Ran 161 tests ... OK (skipped=4)`.
 
 ### Scope notes (what a human must still click)
 
