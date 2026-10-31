@@ -7,4 +7,7 @@
 # (named after the package directory: customnodes_updater/, ucupaint_updater/, …)
 *_updater/
 
+# Packages produced by build.sh
+dist/
+
 credits/*
