@@ -6,10 +6,6 @@ from .subtree import *
 from .node_arrangements import *
 from .node_connections import *
 
-def fix_io_index_360(item, items, correct_index):
-    cur_index = [i for i, it in enumerate(items) if it == item]
-    if cur_index and cur_index[0] != correct_index:
-        items.move(cur_index[0], correct_index)
 
 def get_tree_input_index_400(interface, item):
     index = -1
@@ -64,18 +60,26 @@ def fix_tree_output_index_400(interface, item, correct_index):
                 return
 
 def fix_tree_input_index(tree, item, correct_index):
-    if not is_bl_newer_than(4):
-        fix_io_index_360(item, tree.inputs, correct_index)
-        return
 
     fix_tree_input_index_400(tree.interface, item, correct_index)
 
 def fix_tree_output_index(tree, item, correct_index):
-    if not is_bl_newer_than(4):
-        fix_io_index_360(item, tree.outputs, correct_index)
-        return
 
     fix_tree_output_index_400(tree.interface, item, correct_index)
+
+def get_tree_interface_socket_entries(tree):
+    # Read side of the tree interface, version-safe: pre-4.0 has no `interface` object and keeps
+    # its declarations in two socket collections (`tree.inputs` / `tree.outputs`); 4.0+ keeps them
+    # in one ordered `tree.interface.items_tree`, where non-socket panels also live. Returns
+    # `[(in_out, socket_or_item), …]` in declaration order, sockets only, `[]` for a missing tree.
+    # Read-only by design (NFR-1): callers never branch on the Blender version themselves.
+    if tree is None: return []
+
+
+    items = getattr(tree, 'interface', None)
+    if items is None: return []
+
+    return [(item.in_out, item) for item in items.items_tree if item.item_type == 'SOCKET']
 
 def create_input(tree, name, socket_type, valid_inputs, index, 
         dirty = False, min_value=None, max_value=None, default_value=None, hide_value=False, description='', node=None):
@@ -105,11 +109,6 @@ def create_input(tree, name, socket_type, valid_inputs, index,
 
     return dirty
 
-def make_outputs_first_400(interface):
-    outputs = []
-    for i, item in enumerate(interface.items_tree):
-        if item.in_out == 'OUTPUT':
-            pass
 
 def create_output(tree, name, socket_type, valid_outputs, index, dirty=False, default_value=None):
 
@@ -236,6 +235,8 @@ def check_all_channel_ios(yp, reconnect=True, specific_layer=None, remove_props=
     try: active_preview_ch = yp.channels[yp.preview_mode_channel_index]
     except: active_preview_ch = None
 
+    layer_preview = is_layer_preview_mode_enabled(yp)
+
     # Get channel pairs
     color_ch, alpha_ch = get_color_alpha_ch_pairs(yp)
     normal_ch, height_ch = get_normal_height_ch_pairs(yp)
@@ -341,7 +342,7 @@ def check_all_channel_ios(yp, reconnect=True, specific_layer=None, remove_props=
     check_start_end_root_ch_nodes(group_tree)
 
     specific_channel = None
-    if is_layer_preview_mode_enabled(yp):
+    if layer_preview:
         create_output(group_tree, LAYER_VIEWER, 'NodeSocketColor', valid_outputs, output_index)
         output_index += 1
 
@@ -375,9 +376,16 @@ def check_all_channel_ios(yp, reconnect=True, specific_layer=None, remove_props=
     if do_process_layers:
         # Update layer IO
         for layer in yp.layers:
-            if specific_layer and layer != specific_layer: continue
+            if specific_layer and layer != specific_layer:
+                # Layer preview mode: the two viewer outputs are yp-wide state, so every layer
+                # tree must carry them (P1a). Otherwise the newly active layer's yp layer node
+                # lacks `_Layer Viewer` and `reconnect_yp_nodes`'s preview link raises.
+                if layer_preview:
+                    tree = get_tree(layer)
+                    if tree: check_layer_tree_ios(layer, tree, remove_props=remove_props, hard_reset=hard_reset)
+                continue
             specific_ch = None
-            if is_layer_preview_mode_enabled(yp) and yp.preview_mode_channel_index < len(layer.channels):
+            if layer_preview and yp.preview_mode_channel_index < len(layer.channels):
                 specific_ch = layer.channels[yp.preview_mode_channel_index]
             check_all_layer_channel_io_and_nodes(layer, specific_ch=specific_ch, do_recursive=False, remove_props=remove_props, hard_reset=hard_reset)
 
@@ -418,6 +426,10 @@ def check_all_layer_channel_io_and_nodes(layer, tree=None, specific_ch=None, do_
         mapping = tree.nodes.get(layer.mapping)
         if not mapping:
             mapping = new_node(tree, layer, 'mapping', 'ShaderNodeMapping', 'Mapping')
+    elif layer.type == 'CUSTOM':
+        # CUSTOM: the group no longer declares a `Vector` input, so the mapping node is dead and
+        # would be an orphan (FR-18). Other types never created one in that state (FR-7).
+        remove_node(tree, layer, 'mapping')
 
     # Flip Y
     #update_image_flip_y(self, context)
@@ -639,7 +651,7 @@ def check_layer_tree_ios(layer, tree=None, remove_props=False, hard_reset=False)
                 dirty = create_prop_input(layer, 'decal_scale', valid_inputs, input_index, dirty, float_factor_input_names)
                 input_index += 1
 
-        if is_bl_newer_than(2, 81) and layer.enable_uniform_scale and is_layer_using_vector(layer) and layer.segment_name == '':
+        if layer.enable_uniform_scale and is_layer_using_vector(layer) and layer.segment_name == '':
             dirty = create_prop_input(layer, 'uniform_scale_value', valid_inputs, input_index, dirty, float_factor_input_names)
             input_index += 1
 
@@ -763,7 +775,7 @@ def check_layer_tree_ios(layer, tree=None, remove_props=False, hard_reset=False)
             dirty = create_prop_input(mask, 'intensity_value', valid_inputs, input_index, dirty, float_factor_input_names)
             input_index += 1
 
-            if is_bl_newer_than(2, 81) and mask.enable_uniform_scale and is_mask_using_vector(mask) and mask.segment_name == '':
+            if mask.enable_uniform_scale and is_mask_using_vector(mask) and mask.segment_name == '':
                 dirty = create_prop_input(mask, 'uniform_scale_value', valid_inputs, input_index, dirty, float_factor_input_names)
                 input_index += 1
 
@@ -839,6 +851,8 @@ def check_layer_tree_ios(layer, tree=None, remove_props=False, hard_reset=False)
                 output_index += 1
 
     # Tree background inputs
+    # CUSTOM: background/group layers expose background inputs; CUSTOM is a normal source whose
+    # own group inputs are forwarded instead (out of this set).
     if layer.type in {'BACKGROUND', 'GROUP'}:
 
         for i, ch in enumerate(layer.channels):
@@ -925,7 +939,7 @@ def check_layer_tree_ios(layer, tree=None, remove_props=False, hard_reset=False)
 
                 # Set value back to prop
                 val = layer_node.inputs.get(inp.name).default_value
-                socket_type = inp.socket_type if is_bl_newer_than(4) else inp.type
+                socket_type = inp.socket_type
 
                 # Get property path
                 path = 'yp.layers['+str(get_layer_index(layer))+']'+inp.name

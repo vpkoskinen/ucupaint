@@ -233,17 +233,6 @@ def get_global_settings_props():
         if hasattr(parent, "__annotations__"):
             all_props.update(parent.__annotations__.keys())
         
-        # Blender 2.7x
-        if hasattr(parent, "__dict__"):
-            for key, value in parent.__dict__.items():
-                # Blender 2.7x properties are stored as specific tuples or internal descriptors
-                is_27x_prop = (
-                    isinstance(value, tuple) and 
-                    hasattr(value, "__name__") and 
-                    value.__name__.startswith('Property')
-                )
-                if is_27x_prop:
-                    all_props.add(key)
 
     return all_props
 
@@ -283,9 +272,7 @@ def update_new_bake_target_preset(self, context):
         suffix = ' Normal DirectX'
 
     if self.data_type == 'VCOL':
-        if is_bl_newer_than(3, 2):
-            self.name += ' Attribute'
-        else: self.name += ' VCol'
+        self.name += ' Attribute'
 
     self.name = get_unique_name(tree_name + suffix, yp.bake_targets)
     if self.data_type == 'IMAGE':
@@ -305,9 +292,7 @@ def update_new_bake_target_channel_idx(self, context):
         self.name = tree.name.replace(get_addon_title()+' ','')+' '+root_ch.name
 
         if self.data_type == 'VCOL':
-            if is_bl_newer_than(3, 2):
-                self.name += ' Attribute'
-            else: self.name += ' VCol'
+            self.name += ' Attribute'
 
         self.name = get_unique_name(self.name, yp.bake_targets)
         if self.data_type == 'IMAGE':
@@ -526,7 +511,7 @@ def check_channel_bake_target_nodes(yp):
             baked_normal.uv_map = uv_map_dict[ch.name]
 
             baked_normal_prep = check_new_node(tree, ch, 'baked_normal_prep', 'ShaderNodeGroup', 'Baked Normal Preparation')
-            lib_name = lib.NORMAL_MAP_PREP if is_bl_newer_than(2, 80) else lib.NORMAL_MAP_PREP_LEGACY
+            lib_name = lib.NORMAL_MAP_PREP
             if not baked_normal_prep.node_tree or baked_normal_prep.node_tree.name != lib_name:
                 baked_normal_prep.node_tree = get_node_tree_lib(lib_name)
         else:
@@ -759,9 +744,7 @@ def update_new_channel_bake_target_data_type(self, context):
     tree_name = tree.name.replace(get_addon_title() + ' ', '')
     self.name = tree_name + ' ' + channel.name
 
-    if is_bl_newer_than(3, 2):
-        extra_name = ' Attribute'
-    else: extra_name = ' VCol'
+    extra_name = ' Attribute'
 
     if self.data_type == 'VCOL':
         self.name += extra_name
@@ -925,11 +908,10 @@ class YNewBakeTarget(bpy.types.Operator):
         right_aligned_label(row, 'Name:')
         row.prop(self, 'name', text='')
 
-        if is_bl_newer_than(2, 92):
-            row = split_layout(layout, split_val)
-            right_aligned_label(row, 'Type:')
-            rrow = row.row(align=True)
-            rrow.prop(self, 'data_type', expand=True)
+        row = split_layout(layout, split_val)
+        right_aligned_label(row, 'Type:')
+        rrow = row.row(align=True)
+        rrow.prop(self, 'data_type', expand=True)
 
         row = split_layout(layout, split_val)
         right_aligned_label(row, 'Channel:')

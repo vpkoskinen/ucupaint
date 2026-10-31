@@ -780,6 +780,8 @@ def check_modifiers_trees(parent, rearrange=False):
         name = layer.name
         check_layer_modifier_tree(layer)
         return
+        # CUSTOM: modifier trees exist for a custom layer like NOISE (in this set); only the
+        # generator-less types listed are skipped.
         if layer.type not in {'IMAGE', 'VCOL', 'BACKGROUND', 'COLOR', 'GROUP', 'HEMI', 'MUSGRAVE'}:
             enable_tree = True
         if layer.source_group != '':

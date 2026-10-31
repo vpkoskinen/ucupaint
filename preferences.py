@@ -16,9 +16,8 @@ def update_icons(self, context):
 
 def update_legacy_add_layer_menu(self, context):
     # Reload menus
-    if is_bl_newer_than(4):
-        from . import ui
-        ui.register_new_entity_menus()
+    from . import ui
+    ui.register_new_entity_menus()
 
 def update_default_bake_device(self, context):
     if self.default_bake_device != 'DEFAULT':
@@ -192,9 +191,8 @@ class YPaintPreferences(AddonPreferences):
     )
 
     def draw(self, context):
-        if is_bl_newer_than(2, 80):
-            self.layout.prop(self, 'default_bake_device')
-            self.layout.prop(self, 'icons')
+        self.layout.prop(self, 'default_bake_device')
+        self.layout.prop(self, 'icons')
 
         self.layout.prop(self, 'default_image_resolution')
         if self.default_image_resolution == 'CUSTOM':
@@ -212,12 +210,9 @@ class YPaintPreferences(AddonPreferences):
         self.layout.prop(self, 'skip_property_popups')
         self.layout.prop(self, 'enable_baked_outside_by_default')
         self.layout.prop(self, 'always_evaluate_frame')
-        if is_bl_newer_than(2, 81):
-            self.layout.prop(self, 'enable_uniform_uv_scale_by_default')
-        if is_bl_newer_than(2, 80):
-            self.layout.prop(self, 'ui_non_popup_settings')
-        if is_bl_newer_than(4):
-            self.layout.prop(self, 'ui_legacy_add_layer_menu')
+        self.layout.prop(self, 'enable_uniform_uv_scale_by_default')
+        self.layout.prop(self, 'ui_non_popup_settings')
+        self.layout.prop(self, 'ui_legacy_add_layer_menu')
         self.layout.prop(self, 'hide_update_notification')
         self.layout.prop(self, 'show_experimental')
         self.layout.prop(self, 'developer_mode')

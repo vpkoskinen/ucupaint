@@ -28,10 +28,8 @@ def fill_tile(image, tilenum, color=None, width=0, height=0, empty_only=False):
         # Create new tile
         override = bpy.context.copy()
         override['edit_image'] = image
-        if is_bl_newer_than(4):
-            with bpy.context.temp_override(**override):
-                bpy.ops.image.tile_add(number=tilenum, count=1, label="", color=color, width=width, height=height, float=image.is_float, alpha=True)
-        else: bpy.ops.image.tile_add(override, number=tilenum, count=1, label="", color=color, width=width, height=height, float=image.is_float, alpha=True)
+        with bpy.context.temp_override(**override):
+            bpy.ops.image.tile_add(number=tilenum, count=1, label="", color=color, width=width, height=height, float=image.is_float, alpha=True)
 
     # HACK: UDIM image with size of 0 always need to be filled first
     elif not empty_only or (tilenum == 1001 and image.size[0] == 0):
@@ -40,10 +38,8 @@ def fill_tile(image, tilenum, color=None, width=0, height=0, empty_only=False):
 
         override = bpy.context.copy()
         override['edit_image'] = image
-        if is_bl_newer_than(4):
-            with bpy.context.temp_override(**override):
-                bpy.ops.image.tile_fill(color=color, width=width, height=height, float=image.is_float, alpha=True)
-        else: bpy.ops.image.tile_fill(override, color=color, width=width, height=height, float=image.is_float, alpha=True)
+        with bpy.context.temp_override(**override):
+            bpy.ops.image.tile_fill(color=color, width=width, height=height, float=image.is_float, alpha=True)
 
     else:
         return False
@@ -246,22 +242,16 @@ def get_udim_filepath(filename, directory):
 def save_udim(image):
     override = bpy.context.copy()
     override['edit_image'] = image
-    if is_bl_newer_than(4):
-        with bpy.context.temp_override(**override):
-            bpy.ops.image.save_as(filepath=bpy.path.abspath(image.filepath), relative_path=True)
-            #bpy.ops.image.save()
-    else: 
-        bpy.ops.image.save_as(override, filepath=bpy.path.abspath(image.filepath), relative_path=True)
+    with bpy.context.temp_override(**override):
+        bpy.ops.image.save_as(filepath=bpy.path.abspath(image.filepath), relative_path=True)
         #bpy.ops.image.save(override)
 
 def save_as_udim(image, filepath=''):
     if filepath == '': filepath = image.filepath
     override = bpy.context.copy()
     override['edit_image'] = image
-    if is_bl_newer_than(4):
-        with bpy.context.temp_override(**override):
-            bpy.ops.image.save_as(filepath=bpy.path.abspath(filepath), relative_path=True)
-    else: bpy.ops.image.save_as(override, filepath=bpy.path.abspath(filepath), relative_path=True)
+    with bpy.context.temp_override(**override):
+        bpy.ops.image.save_as(filepath=bpy.path.abspath(filepath), relative_path=True)
 
 def remove_empty_tiles(image):
     empties_removed = False

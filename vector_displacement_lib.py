@@ -681,7 +681,7 @@ def get_vdm_loader_geotree(uv_name='', vdm_image=None, tangent_image=None, bitan
 
     if not tree:
         tree = bpy.data.node_groups.new(GEO_VDM_LOADER, 'GeometryNodeTree')
-        if is_bl_newer_than(4): tree.is_modifier = True
+        tree.is_modifier = True
         nodes = tree.nodes
         links = tree.links
 
@@ -728,9 +728,7 @@ def get_vdm_loader_geotree(uv_name='', vdm_image=None, tangent_image=None, bitan
         offset_capture.domain = 'CORNER'
 
         # Capture items is manually defined in Blender 4.2
-        if is_bl_newer_than(4, 2):
-            offset_capture.capture_items.new('VECTOR', 'Vector')
-        else: offset_capture.data_type = 'FLOAT_VECTOR'
+        offset_capture.capture_items.new('VECTOR', 'Vector')
 
         offset = tree.nodes.new('GeometryNodeSetPosition')
         offset.label = 'Offset'

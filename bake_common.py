@@ -59,10 +59,8 @@ def get_problematic_modifiers(obj):
             # Mirror modifier is not problematic if mirror uv is used
             if m.type == 'MIRROR':
                 if not m.use_mirror_u and not m.use_mirror_v:
-                    if is_bl_newer_than(2, 80):
-                        if m.offset_u == 0.0 and m.offset_v == 0.0:
-                            pms.append(m)
-                    else: pms.append(m)
+                    if m.offset_u == 0.0 and m.offset_v == 0.0:
+                        pms.append(m)
             else: pms.append(m)
 
     return pms
@@ -153,6 +151,14 @@ def is_join_objects_problematic(yp, mat=None):
                 print('INFO: Merged bake is not happening because there\'s object index mask')
                 return True
 
+        # CUSTOM: a referenced group can reach per-object data through anything it contains, so a
+        # merged bake is never assumed safe (FR-21, ADR-0004).
+        if layer.type == 'CUSTOM':
+            print('INFO: Merged bake is not happening because there\'s a custom node layer')
+            return True
+
+        # CUSTOM: handled above as the FR-21 problematic case (ADR-0004), so it never reaches this
+        # per-type skip set.
         if layer.type in {'VCOL', 'COLOR', 'BACKGROUND', 'HEMI', 'GROUP'}: 
             continue
         if layer.texcoord_type in JOIN_PROBLEMATIC_TEXCOORDS:
@@ -167,11 +173,10 @@ def is_join_objects_problematic(yp, mat=None):
                 return True
 
         # Check for mismatched color attribute data
-        if is_bl_newer_than(3, 2):
-            objs = get_all_objects_with_same_materials(mat, True)
-            if is_there_any_mismatched_attribute_types(objs):
-                print('INFO: Merged bake is not happening because there\'s mismatched attribute data types')
-                return True
+        objs = get_all_objects_with_same_materials(mat, True)
+        if is_there_any_mismatched_attribute_types(objs):
+            print('INFO: Merged bake is not happening because there\'s mismatched attribute data types')
+            return True
 
     return False
 
@@ -186,11 +191,7 @@ def get_mesh_corner_arrays(me):
     lv = numpy.empty(nl, dtype=numpy.int64); me.loops.foreach_get('vertex_index', lv)
 
     cn = numpy.empty(nl * 3, dtype=numpy.float32)
-    if is_bl_newer_than(4, 1):
-        me.corner_normals.foreach_get('vector', cn)
-    else:
-        me.calc_normals_split()
-        me.loops.foreach_get('normal', cn)
+    me.corner_normals.foreach_get('vector', cn)
     cn.shape = (-1, 3)
 
     return co, ls, lt, ev, le, lv, cn
@@ -652,22 +653,18 @@ def normalize_image_values(image):
 
 def get_image_minmax_value(image):
     
-    if is_bl_newer_than(2, 83):
-        pxs = numpy.empty(shape=image.size[0] * image.size[1] * 4, dtype=numpy.float32)
-        image.pixels.foreach_get(pxs)
+    pxs = numpy.empty(shape=image.size[0] * image.size[1] * 4, dtype=numpy.float32)
+    image.pixels.foreach_get(pxs)
 
-        pxs.shape = (-1, image.size[0], 4)
+    pxs.shape = (-1, image.size[0], 4)
 
-        # Set alpha to half
-        pxs *= (1, 1, 1, 0.5)
+    # Set alpha to half
+    pxs *= (1, 1, 1, 0.5)
 
-        min_val = pxs.min()
-        max_val = pxs.max()
+    min_val = pxs.min()
+    max_val = pxs.max()
 
-        return min_val, max_val
-    else:
-        # TODO: Get minimum and maximum pixel on legacy blenders
-        return 0.4, 0.6
+    return min_val, max_val
 
 def bake_object_op(bake_type='EMIT'):
     try:
@@ -721,9 +718,7 @@ def remember_before_bake(yp=None, mat=None):
         book['ori_max_ray_distance'] = scene.render.bake.max_ray_distance
     book['ori_cage_extrusion'] = scene.render.bake.cage_extrusion
     book['ori_use_cage'] = scene.render.bake.use_cage
-    if is_bl_newer_than(2, 80):
-        book['ori_cage_object_name'] = scene.render.bake.cage_object.name if scene.render.bake.cage_object else ''
-    else: book['ori_cage_object_name'] = scene.render.bake.cage_object
+    book['ori_cage_object_name'] = scene.render.bake.cage_object.name if scene.render.bake.cage_object else ''
 
     if hasattr(scene.render.bake, 'margin_type'):
         book['ori_margin_type'] = scene.render.bake.margin_type
@@ -737,9 +732,7 @@ def remember_before_bake(yp=None, mat=None):
     if hasattr(scene.render.bake, 'target'):
         book['ori_bake_target'] = scene.render.bake.target
 
-    if is_bl_newer_than(2, 80):
-        book['ori_material_override'] = bpy.context.view_layer.material_override
-    else: book['ori_material_override'] = scene.render.layers.active.material_override
+    book['ori_material_override'] = bpy.context.view_layer.material_override
 
     # Multires related
     book['ori_use_bake_multires'] = get_scene_bake_multires(scene)
@@ -747,8 +740,6 @@ def remember_before_bake(yp=None, mat=None):
     book['ori_render_bake_type'] = get_scene_render_bake_type(scene)
     book['ori_bake_margin'] = get_scene_bake_margin(scene)
 
-    if is_bl_newer_than(2, 81) and not is_bl_newer_than(3) and scene.cycles.device == 'GPU' and 'compute_device_type' in bpy.context.preferences.addons['cycles'].preferences:
-        book['compute_device_type'] = bpy.context.preferences.addons['cycles'].preferences['compute_device_type']
 
     # Remember uv
     book['ori_active_uv'] = uv_layers.active.name
@@ -763,31 +754,23 @@ def remember_before_bake(yp=None, mat=None):
         book['ori_space_view_matrix'] = space.region_3d.view_matrix.copy()
 
     # Remember scene objects
-    if is_bl_newer_than(2, 80):
-        book['ori_hide_selects'] = [o for o in bpy.context.view_layer.objects if o.hide_select]
-        book['ori_active_selected_objs'] = [o for o in bpy.context.view_layer.objects if o.select_get()]
-        book['ori_hide_renders'] = [o for o in bpy.context.view_layer.objects if o.hide_render]
-        book['ori_hide_viewports'] = [o for o in bpy.context.view_layer.objects if o.hide_viewport]
-        book['ori_hide_objs'] = [o for o in bpy.context.view_layer.objects if o.hide_get()]
+    book['ori_hide_selects'] = [o for o in bpy.context.view_layer.objects if o.hide_select]
+    book['ori_active_selected_objs'] = [o for o in bpy.context.view_layer.objects if o.select_get()]
+    book['ori_hide_renders'] = [o for o in bpy.context.view_layer.objects if o.hide_render]
+    book['ori_hide_viewports'] = [o for o in bpy.context.view_layer.objects if o.hide_viewport]
+    book['ori_hide_objs'] = [o for o in bpy.context.view_layer.objects if o.hide_get()]
 
-        layer_cols = get_all_layer_collections([], bpy.context.view_layer.layer_collection)
+    layer_cols = get_all_layer_collections([], bpy.context.view_layer.layer_collection)
 
-        book['ori_layer_col_hide_viewport'] = [lc for lc in layer_cols if lc.hide_viewport]
-        book['ori_layer_col_exclude'] = [lc for lc in layer_cols if lc.exclude]
-        book['ori_col_hide_viewport'] = [c for c in bpy.data.collections if c.hide_viewport]
-        book['ori_col_hide_render'] = [c for c in bpy.data.collections if c.hide_render]
+    book['ori_layer_col_hide_viewport'] = [lc for lc in layer_cols if lc.hide_viewport]
+    book['ori_layer_col_exclude'] = [lc for lc in layer_cols if lc.exclude]
+    book['ori_col_hide_viewport'] = [c for c in bpy.data.collections if c.hide_viewport]
+    book['ori_col_hide_render'] = [c for c in bpy.data.collections if c.hide_render]
 
-        # Remember space data
-        if space.type == 'VIEW_3D':
-            book['ori_space_show_object_viewport_mesh'] = space.show_object_viewport_mesh
-            book['ori_space_show_object_select_mesh'] = space.show_object_select_mesh
-
-    else: 
-        book['ori_hide_selects'] = [o for o in scene.objects if o.hide_select]
-        book['ori_active_selected_objs'] = [o for o in scene.objects if o.select]
-        book['ori_hide_renders'] = [o for o in scene.objects if o.hide_render]
-        book['ori_hide_objs'] = [o for o in scene.objects if o.hide]
-        book['ori_scene_layers'] = [i for i in range(20) if scene.layers[i]]
+    # Remember space data
+    if space.type == 'VIEW_3D':
+        book['ori_space_show_object_viewport_mesh'] = space.show_object_viewport_mesh
+        book['ori_space_show_object_select_mesh'] = space.show_object_select_mesh
 
     # Remember image editor images
     book['editor_images'] = [a.spaces[0].image for a in bpy.context.screen.areas if a.type == 'IMAGE_EDITOR']
@@ -872,8 +855,7 @@ def realize_particle_instances(objs):
         if instance_found:
 
             # Select object
-            if is_bl_newer_than(2, 80):
-                obj.hide_viewport = False
+            obj.hide_viewport = False
             set_object_hide(obj, False)
             set_object_select(obj, True)
             set_active_object(obj)
@@ -1115,20 +1097,19 @@ def prepare_other_objs_channels(yp, other_objs):
                                         default = socket.default_value
 
                                         # Blender 4.0 has weight/strength value for some inputs
-                                        if is_bl_newer_than(4):
-                                            input_prefixes = ['Subsurface', 'Coat', 'Sheen', 'Emission']
-                                            for prefix in input_prefixes:
-                                                if socket.name.startswith(prefix):
+                                        input_prefixes = ['Subsurface', 'Coat', 'Sheen', 'Emission']
+                                        for prefix in input_prefixes:
+                                            if socket.name.startswith(prefix):
 
-                                                    if socket.name.startswith('Emission'):
-                                                        weight_socket_name = 'Emission Strength'
-                                                    else: weight_socket_name = prefix + ' Weight'
+                                                if socket.name.startswith('Emission'):
+                                                    weight_socket_name = 'Emission Strength'
+                                                else: weight_socket_name = prefix + ' Weight'
 
-                                                    # NOTE: Only set the default weight if there's no dedicated channel for weight in destination yp
-                                                    if weight_socket_name not in yp.channels and weight_socket_name != socket.name:
-                                                        weight_socket = bsdf_node.inputs.get(weight_socket_name)
-                                                        if weight_socket:
-                                                            default_weight = weight_socket.default_value
+                                                # NOTE: Only set the default weight if there's no dedicated channel for weight in destination yp
+                                                if weight_socket_name not in yp.channels and weight_socket_name != socket.name:
+                                                    weight_socket = bsdf_node.inputs.get(weight_socket_name)
+                                                    if weight_socket:
+                                                        default_weight = weight_socket.default_value
                                 else:
                                     socket = socket.links[0].from_socket
 
@@ -1208,8 +1189,7 @@ def prepare_bake_settings(
     scene.render.bake.use_cage = use_cage
     scene.render.use_motion_blur = False
     if cage_object: 
-        if is_bl_newer_than(2, 80): scene.render.bake.cage_object = cage_object
-        else: scene.render.bake.cage_object = cage_object.name
+        scene.render.bake.cage_object = cage_object
     scene.render.use_simplify = False
     if hasattr(scene.render.bake, 'use_pass_direct'): scene.render.bake.use_pass_direct = True
     if hasattr(scene.render.bake, 'use_pass_indirect'): scene.render.bake.use_pass_indirect = True
@@ -1230,9 +1210,7 @@ def prepare_bake_settings(
     if hasattr(scene.render.bake, 'margin_type'):
         scene.render.bake.margin_type = margin_type
 
-    if is_bl_newer_than(2, 80):
-        bpy.context.view_layer.material_override = None
-    else: scene.render.layers.active.material_override = None
+    bpy.context.view_layer.material_override = None
 
     if bake_from_multires:
         set_scene_bake_multires(scene, True)
@@ -1244,99 +1222,59 @@ def prepare_bake_settings(
         scene.cycles.bake_type = bake_type
 
     # Old blender will always use CPU
-    if not is_bl_newer_than(2, 80) or use_osl:
+    if use_osl:
         scene.cycles.device = 'CPU'
     else: scene.cycles.device = bake_device
 
     # Use CUDA bake if Optix is selected
-    if (is_bl_newer_than(2, 81) and not is_bl_newer_than(3) and 'compute_device_type' in bpy.context.preferences.addons['cycles'].preferences and
-            bpy.context.preferences.addons['cycles'].preferences['compute_device_type'] == 3):
-        #scene.cycles.device = 'CPU'
-        bpy.context.preferences.addons['cycles'].preferences['compute_device_type'] = 1
 
     if bake_type == 'NORMAL':
         scene.render.bake.normal_space = normal_space
 
     # Disable other object selections and select only active object
-    if is_bl_newer_than(2, 80):
+    for o in source_objs:
+        layer_cols = get_object_parent_layer_collections([], bpy.context.view_layer.layer_collection, o)
+        for lc in layer_cols:
+            lc.exclude = False
 
-        # Disable exclude only works on source objects
-        for o in source_objs:
-            layer_cols = get_object_parent_layer_collections([], bpy.context.view_layer.layer_collection, o)
-            for lc in layer_cols:
-                lc.exclude = False
+    # Show viewport and render of object layer collection
+    for o in objs:
+        o.hide_select = False
+        o.hide_viewport = False
+        o.hide_render = False
+        layer_cols = get_object_parent_layer_collections([], bpy.context.view_layer.layer_collection, o)
+        for lc in layer_cols:
+            lc.hide_viewport = False
+            lc.collection.hide_viewport = False
+            lc.collection.hide_render = False
 
-        # Show viewport and render of object layer collection
-        for o in objs:
-            o.hide_select = False
-            o.hide_viewport = False
-            o.hide_render = False
-            layer_cols = get_object_parent_layer_collections([], bpy.context.view_layer.layer_collection, o)
-            for lc in layer_cols:
-                lc.hide_viewport = False
-                lc.collection.hide_viewport = False
-                lc.collection.hide_render = False
-
-        if hide_other_objs:
-            for o in bpy.context.view_layer.objects:
-                if o not in objs:
-                    o.hide_render = True
-
-        #for o in scene.objects:
+    if hide_other_objs:
         for o in bpy.context.view_layer.objects:
-            o.select_set(False)
+            if o not in objs:
+                o.hide_render = True
 
-        for obj in objs:
-            obj.hide_set(False)
+    #for o in scene.objects:
+    for o in bpy.context.view_layer.objects:
+        o.select_set(False)
 
-            if bake_from_multires:
-                # Do not select object without multires modifier
-                mod = get_multires_modifier(obj)
-                if not mod:
-                    obj.select_set(False)
-                else: obj.select_set(True)
-            else:
-                obj.select_set(True)
-            #print(obj.name, obj.hide_render, obj.select_get())
+    for obj in objs:
+        obj.hide_set(False)
 
-        # Disable material override
-        book['material_override'] = bpy.context.view_layer.material_override
-        bpy.context.view_layer.material_override = None
+        if bake_from_multires:
+            # Do not select object without multires modifier
+            mod = get_multires_modifier(obj)
+            if not mod:
+                obj.select_set(False)
+            else: obj.select_set(True)
+        else:
+            obj.select_set(True)
+        #print(obj.name, obj.hide_render, obj.select_get())
 
-    else:
-
-        for obj in objs:
-            obj.hide_select = False
-            obj.hide_render = False
-
-        if hide_other_objs:
-            for o in scene.objects:
-                if o not in objs:
-                    o.hide_render = True
-
-        for o in scene.objects:
-            o.select = False
-
-        for obj in objs:
-            obj.hide = False
-            obj.select = True
-
-            # Unhide layer objects
-            if not in_active_279_layer(obj):
-                for i in range(20):
-                    if obj.layers[i] and not scene.layers[i]:
-                        scene.layers[i] = True
-                        break
+    # Disable material override
+    book['material_override'] = bpy.context.view_layer.material_override
+    bpy.context.view_layer.material_override = None
 
             # Blender 2.76 needs all objects to be UV unwrapped
-            if not is_bl_newer_than(2, 77):
-                ori_active_object = scene.objects.active
-                uv_layers = get_uv_layers(obj)
-                if len(uv_layers) == 0:
-                    scene.objects.active = obj
-                    bpy.ops.wm.y_add_simple_uvs()
-                if scene.objects.active != ori_active_object:
-                    scene.objects.active = ori_active_object
 
     book['obj_mods_lib'] = {}
     if disable_problematic_modifiers:
@@ -1359,9 +1297,8 @@ def prepare_bake_settings(
 
     if space.type == 'VIEW_3D':
         # Make sure mesh objects are visible
-        if is_bl_newer_than(2, 80):
-            space.show_object_viewport_mesh = True
-            space.show_object_select_mesh = True
+        space.show_object_viewport_mesh = True
+        space.show_object_select_mesh = True
 
         # Use global view
         if space.local_view:
@@ -1477,12 +1414,9 @@ def recover_bake_settings(book, yp=None, recover_active_uv=False, mat=None):
     if book['ori_cage_object_name'] != '':
         cage_object = bpy.data.objects.get(book['ori_cage_object_name'])
         if cage_object: 
-            if is_bl_newer_than(2, 80): scene.render.bake.cage_object = cage_object
-            else: scene.render.bake.cage_object = cage_object.name
+            scene.render.bake.cage_object = cage_object
 
-    if is_bl_newer_than(2, 80):
-        bpy.context.view_layer.material_override = book['ori_material_override']
-    else: scene.render.layers.active.material_override = book['ori_material_override']
+    bpy.context.view_layer.material_override = book['ori_material_override']
 
     # Multires related
     set_scene_bake_multires(scene, book['ori_use_bake_multires'])
@@ -1493,7 +1427,7 @@ def recover_bake_settings(book, yp=None, recover_active_uv=False, mat=None):
     if 'compute_device_type' in book:
         bpy.context.preferences.addons['cycles'].preferences['compute_device_type'] = book['compute_device_type']
 
-    if is_bl_newer_than(2, 80) and 'material_override' in book:
+    if 'material_override' in book:
         bpy.context.view_layer.material_override = book['material_override']
 
     # Recover world settings
@@ -1506,15 +1440,10 @@ def recover_bake_settings(book, yp=None, recover_active_uv=False, mat=None):
         if uvl: uv_layers.active = uvl
 
         # NOTE: Blender 2.90 or lower need to use active render so the UV in image editor paint mode is updated
-        if not is_bl_newer_than(2, 91):
-            if 'ori_active_render_uv' in book:
-                uvl = uv_layers.get(book['ori_active_render_uv'])
-                if uvl: uvl.active_render = True
 
-    if is_bl_newer_than(2, 91):
-        if 'ori_active_render_uv' in book:
-            uvl = uv_layers.get(book['ori_active_render_uv'])
-            if uvl: uvl.active_render = True
+    if 'ori_active_render_uv' in book:
+        uvl = uv_layers.get(book['ori_active_render_uv'])
+        if uvl: uvl.active_render = True
 
     # Recover active object
     set_active_object(obj)
@@ -1524,68 +1453,48 @@ def recover_bake_settings(book, yp=None, recover_active_uv=False, mat=None):
         bpy.ops.object.mode_set(mode = book['mode'])
 
     # Disable other object selections
-    if is_bl_newer_than(2, 80):
+    layer_cols = get_all_layer_collections([], bpy.context.view_layer.layer_collection)
+    for lc in layer_cols:
+        if lc in book['ori_layer_col_hide_viewport']:
+            lc.hide_viewport = True
+        else: lc.hide_viewport = False
 
-        # Recover collections
-        layer_cols = get_all_layer_collections([], bpy.context.view_layer.layer_collection)
-        for lc in layer_cols:
-            if lc in book['ori_layer_col_hide_viewport']:
-                lc.hide_viewport = True
-            else: lc.hide_viewport = False
+        if lc in book['ori_layer_col_exclude']:
+            lc.exclude = True
+        else: lc.exclude = False
 
-            if lc in book['ori_layer_col_exclude']:
-                lc.exclude = True
-            else: lc.exclude = False
+    for c in bpy.data.collections:
+        if c in book['ori_col_hide_viewport']:
+            c.hide_viewport = True
+        else: c.hide_viewport = False
 
-        for c in bpy.data.collections:
-            if c in book['ori_col_hide_viewport']:
-                c.hide_viewport = True
-            else: c.hide_viewport = False
+        if c in book['ori_col_hide_render']:
+            c.hide_render = True
+        else: c.hide_render = False
 
-            if c in book['ori_col_hide_render']:
-                c.hide_render = True
-            else: c.hide_render = False
+    objs = [o for o in bpy.context.view_layer.objects]
+    for o in objs:
+        if o in book['ori_active_selected_objs']:
+            o.select_set(True)
+        else: o.select_set(False)
+        if o in book['ori_hide_renders']:
+            o.hide_render = True
+        else: o.hide_render = False
+        if o in book['ori_hide_viewports']:
+            o.hide_viewport = True
+        else: o.hide_viewport = False
+        if o in book['ori_hide_objs']:
+            o.hide_set(True)
+        else: o.hide_set(False)
+        if o in book['ori_hide_selects']:
+            o.hide_select = True
+        else: o.hide_select = False
 
-        objs = [o for o in bpy.context.view_layer.objects]
-        for o in objs:
-            if o in book['ori_active_selected_objs']:
-                o.select_set(True)
-            else: o.select_set(False)
-            if o in book['ori_hide_renders']:
-                o.hide_render = True
-            else: o.hide_render = False
-            if o in book['ori_hide_viewports']:
-                o.hide_viewport = True
-            else: o.hide_viewport = False
-            if o in book['ori_hide_objs']:
-                o.hide_set(True)
-            else: o.hide_set(False)
-            if o in book['ori_hide_selects']:
-                o.hide_select = True
-            else: o.hide_select = False
-
-        # Recover space data
-        space = bpy.context.space_data
-        if space.type == 'VIEW_3D':
-            space.show_object_viewport_mesh = book['ori_space_show_object_viewport_mesh']
-            space.show_object_select_mesh = book['ori_space_show_object_select_mesh']
-
-    else:
-        for o in scene.objects:
-            if o in book['ori_active_selected_objs']:
-                o.select = True
-            else: o.select = False
-            if o in book['ori_hide_renders']:
-                o.hide_render = True
-            else: o.hide_render = False
-            if o in book['ori_hide_objs']:
-                o.hide = True
-            else: o.hide = False
-            if o in book['ori_hide_selects']:
-                o.hide_select = True
-            else: o.hide_select = False
-        for i in range(20):
-            scene.layers[i] = i in book['ori_scene_layers']
+    # Recover space data
+    space = bpy.context.space_data
+    if space.type == 'VIEW_3D':
+        space.show_object_viewport_mesh = book['ori_space_show_object_viewport_mesh']
+        space.show_object_select_mesh = book['ori_space_show_object_select_mesh']
 
     # Recover image editors
     for i, area in enumerate([a for a in bpy.context.screen.areas if a.type == 'IMAGE_EDITOR']):
@@ -1651,7 +1560,7 @@ def prepare_composite_settings(res_x=1024, res_y=1024, use_hdr=False):
     book['ori_scene_name'] = bpy.context.scene.name
 
     # Remember active object and view layer
-    book['ori_viewlayer'] = bpy.context.window.view_layer.name if is_bl_newer_than(2, 80) and bpy.context.window.view_layer else ''
+    book['ori_viewlayer'] = bpy.context.window.view_layer.name if bpy.context.window.view_layer else ''
     book['ori_object'] = bpy.context.object.name if bpy.context.object else ''
 
     # Check if original viewport is using camera view
@@ -1660,9 +1569,7 @@ def prepare_composite_settings(res_x=1024, res_y=1024, use_hdr=False):
 
     # Create new temporary scene
     scene = bpy.data.scenes.new(name='TEMP_COMPOSITE_SCENE')
-    if is_bl_newer_than(2, 80):
-        bpy.context.window.scene = scene
-    else: bpy.context.screen.scene = scene
+    bpy.context.window.scene = scene
 
     # Set up render settings
     scene.cycles.samples = 1
@@ -1678,7 +1585,7 @@ def prepare_composite_settings(res_x=1024, res_y=1024, use_hdr=False):
         scene.compositing_node_group = comp_tree
     else:
         scene.use_nodes = True
-    scene.view_settings.view_transform = 'Standard' if is_bl_newer_than(2, 80) else 'Default'
+    scene.view_settings.view_transform = 'Standard'
     scene.render.dither_intensity = 0.0
 
     # Float/HDR image related
@@ -1720,19 +1627,16 @@ def recover_composite_settings(book):
 
     # Go back to original scene
     scene = bpy.data.scenes.get(book['ori_scene_name'])
-    if is_bl_newer_than(2, 80):
-        bpy.context.window.scene = scene
-    else: bpy.context.screen.scene = scene
+    bpy.context.window.scene = scene
 
     # Recover camera view
     if book['ori_camera_view']:
         bpy.context.area.spaces[0].region_3d.view_perspective = 'CAMERA'
 
     # Recover view layer
-    if is_bl_newer_than(2, 80):
-        ori_viewlayer = bpy.context.scene.view_layers.get(book['ori_viewlayer'])
-        if ori_viewlayer and bpy.context.window.view_layer != ori_viewlayer:
-            bpy.context.window.view_layer = ori_viewlayer
+    ori_viewlayer = bpy.context.scene.view_layers.get(book['ori_viewlayer'])
+    if ori_viewlayer and bpy.context.window.view_layer != ori_viewlayer:
+        bpy.context.window.view_layer = ori_viewlayer
 
     # Recover active object
     ori_object = bpy.data.objects.get(book['ori_object'])
@@ -1821,7 +1725,6 @@ def blur_image(image, filter_type='GAUSS', size=10):
     return image
 
 def denoise_image(image):
-    if not is_bl_newer_than(2, 81): return image
 
     T = time.time()
     print('DENOISE: Doing Denoise pass on', image.name + '...')
@@ -2022,9 +1925,8 @@ def noise_blur_image(image, alpha_aware=True, factor=1.0, samples=512, bake_devi
     height = image.size[1]
 
     # Set active collection to be root collection
-    if is_bl_newer_than(2, 80):
-        ori_layer_collection = bpy.context.view_layer.active_layer_collection
-        bpy.context.view_layer.active_layer_collection = bpy.context.view_layer.layer_collection
+    ori_layer_collection = bpy.context.view_layer.active_layer_collection
+    bpy.context.view_layer.active_layer_collection = bpy.context.view_layer.layer_collection
 
     # Create a plane for baking
     plane_obj = create_plane_object()
@@ -2077,12 +1979,6 @@ def noise_blur_image(image, alpha_aware=True, factor=1.0, samples=512, bake_devi
         # Set source image
         source_tex.image = image_copy
 
-        # Blender 2.79 need to set these parameter to correct the gamma
-        if not is_bl_newer_than(2, 80):
-            if image.colorspace_settings.name == get_srgb_name():
-                source_tex.color_space = 'COLOR'
-            else: source_tex.color_space = 'NONE' 
-
         # Connect nodes again
         mat.node_tree.links.new(source_tex.outputs[0], emi.inputs[0])
         mat.node_tree.links.new(emi.outputs[0], output.inputs[0])
@@ -2126,8 +2022,7 @@ def noise_blur_image(image, alpha_aware=True, factor=1.0, samples=512, bake_devi
     recover_bake_settings(book)
 
     # Recover original active layer collection
-    if is_bl_newer_than(2, 80):
-        bpy.context.view_layer.active_layer_collection = ori_layer_collection
+    bpy.context.view_layer.active_layer_collection = ori_layer_collection
 
     print('BLUR:', image.name, 'blur pass is done in', '{:0.2f}'.format(time.time() - T), 'seconds!')
 
@@ -2164,12 +2059,8 @@ def flip_mesh_normals(obj):
     bm = bmesh.new()
     bm.from_mesh(obj.data)
 
-    if is_bl_newer_than(2, 80):
-        for face in bm.faces:
-            face.normal_flip()
-    else:
-        for face in bm.faces:
-            bmesh.utils.face_flip(face)
+    for face in bm.faces:
+        face.normal_flip()
 
     # Write changes back to the mesh
     bm.to_mesh(obj.data)
@@ -2184,9 +2075,8 @@ def fxaa_image(image, alpha_aware=True, bake_device='CPU', first_tile_only=False
     book = remember_before_bake()
 
     # Set active collection to be root collection
-    if is_bl_newer_than(2, 80):
-        ori_layer_collection = bpy.context.view_layer.active_layer_collection
-        bpy.context.view_layer.active_layer_collection = bpy.context.view_layer.layer_collection
+    ori_layer_collection = bpy.context.view_layer.active_layer_collection
+    bpy.context.view_layer.active_layer_collection = bpy.context.view_layer.layer_collection
 
     # Create a plane for baking
     plane_obj = create_plane_object()
@@ -2264,10 +2154,6 @@ def fxaa_image(image, alpha_aware=True, bake_device='CPU', first_tile_only=False
         res_x.outputs[0].default_value = width
         res_y.outputs[0].default_value = height
         tex.image = image_copy
-        if not is_bl_newer_than(2, 80) :
-            if image.colorspace_settings.name == get_srgb_name():
-                tex.color_space = 'COLOR'
-            else: tex.color_space = 'NONE'
 
         # Connect nodes again
         mat.node_tree.links.new(fxaa.outputs[0], emi.inputs[0])
@@ -2307,8 +2193,7 @@ def fxaa_image(image, alpha_aware=True, bake_device='CPU', first_tile_only=False
     recover_bake_settings(book)
 
     # Recover original active layer collection
-    if is_bl_newer_than(2, 80):
-        bpy.context.view_layer.active_layer_collection = ori_layer_collection
+    bpy.context.view_layer.active_layer_collection = ori_layer_collection
 
     print('FXAA:', image.name, 'FXAA pass is done in', '{:0.2f}'.format(time.time() - T), 'seconds!')
 
@@ -2355,9 +2240,7 @@ def bake_to_vcol(mat, node, root_ch, objs, extra_channel=None, extra_multiplier=
     if root_ch.special_type == 'NORMAL':
 
         norm = mat.node_tree.nodes.new('ShaderNodeGroup')
-        if is_bl_newer_than(2, 80) and not is_bl_newer_than(3):
-            norm.node_tree = get_node_tree_lib(lib.BAKE_NORMAL_ACTIVE_UV)
-        else: norm.node_tree = get_node_tree_lib(lib.BAKE_NORMAL_ACTIVE_UV_300)
+        norm.node_tree = get_node_tree_lib(lib.BAKE_NORMAL_ACTIVE_UV_300)
 
     # Get output node and remember original bsdf input
     output = get_material_output(mat, create_one=True)
@@ -2717,30 +2600,6 @@ def prepare_objs_before_baking(mat, yp, objs, uv_map, force_bake_all_polygons=Fa
         # NOTE: This code can freeze blender if there are too many polygons, but it's needed for Blender 2.83 and lower
         obook.ori_mat_ids[ob.name] = []
         obook.ori_loop_locs[ob.name] = []
-        if not is_bl_newer_than(2, 90) and len(ob.data.materials) > 1:
-            active_mat_id = [i for i, m in enumerate(ob.data.materials) if m == mat]
-            if active_mat_id: active_mat_id = active_mat_id[0]
-            else: continue
-
-            # Get uv map
-            uv_layers = get_uv_layers(ob)
-            uvl = uv_layers.get(uv_map)
-
-            for p in ob.data.polygons:
-
-                # Set uv location to (0,0) if not using current material
-                if uvl and not force_bake_all_polygons:
-                    uv_locs = []
-                    for li in p.loop_indices:
-                        uv_locs.append(uvl.data[li].uv.copy())
-                        if p.material_index != active_mat_id:
-                            uvl.data[li].uv = Vector((0.0, 0.0))
-
-                    obook.ori_loop_locs[ob.name].append(uv_locs)
-
-                # Set active mat
-                obook.ori_mat_ids[ob.name].append(p.material_index)
-                p.material_index = active_mat_id
 
         # Check if any objects use geometry nodes to output uv
         if any(get_output_uv_names_from_geometry_nodes(ob)):
@@ -2801,7 +2660,7 @@ def do_image_post_process(image, bprops, alpha_enabled=False, bake_device='CPU',
 
     # Denoise
     if not force_denoise_off:
-        if bprops.denoise and is_bl_newer_than(2, 81):
+        if bprops.denoise:
             denoise_image(image)
 
     # AA process
@@ -2939,22 +2798,6 @@ def bake_bake_target(mat, node, bt, btprops, objs=[], do_objects_setup=True, bak
             all_normal_ch = False
 
     tangent_sign_calculation = False
-    if BL28_HACK and any_normal_ch and is_bl_newer_than(2, 80) and not is_bl_newer_than(3) and bpy.context.object in objs:
-
-        obj = bpy.context.object
-        if len(yp.uvs) < MAX_VERTEX_DATA - len(get_vertex_colors(obj)):
-            print('INFO: Calculating tangent sign before bake...')
-            tangent_sign_calculation = True
-
-            # Update tangent sign vertex color
-            for uv in yp.uvs:
-                tangent_process = tree.nodes.get(uv.tangent_process)
-                if tangent_process:
-                    tangent_process.inputs['Backface Always Up'].default_value = 1.0 if yp.enable_backface_always_up else 0.0
-                    #tangent_process.inputs['Blender 2.8 Cycles Hack'].default_value = 1.0
-                    tansign = tangent_process.node_tree.nodes.get('_tangent_sign')
-                    vcol = refresh_tangent_sign_vcol(obj, uv.name)
-                    if vcol: tansign.attribute_name = vcol.name
 
     # Enable disabled layers if needed
     disabled_layers = []
@@ -3254,7 +3097,7 @@ def bake_bake_target(mat, node, bt, btprops, objs=[], do_objects_setup=True, bak
         rgb = node.outputs.get(normal_root_ch.name)
 
         # NOTE: Object space normal layers currently will gives less accurate result when baking using BSDF
-        if is_bl_newer_than(3) and not any_object_space_normal(yp):
+        if not any_object_space_normal(yp):
             # Use principled bsdf for Blender 2.80+
             bsdf = mat.node_tree.nodes.new('ShaderNodeBsdfPrincipled')
 
@@ -3291,9 +3134,7 @@ def bake_bake_target(mat, node, bt, btprops, objs=[], do_objects_setup=True, bak
         else:
             # Use custom normal calculation for legacy blender
             norm = mat.node_tree.nodes.new('ShaderNodeGroup')
-            if is_bl_newer_than(3) or not is_bl_newer_than(2, 80):
-                norm.node_tree = get_node_tree_lib(lib.BAKE_NORMAL_ACTIVE_UV_300)
-            else: norm.node_tree = get_node_tree_lib(lib.BAKE_NORMAL_ACTIVE_UV)
+            norm.node_tree = get_node_tree_lib(lib.BAKE_NORMAL_ACTIVE_UV_300)
 
             # Custom normal calculation setup
             if rgb: rgb = create_link(mat.node_tree, rgb, norm.inputs[0])[0]
@@ -3567,10 +3408,6 @@ def bake_bake_target(mat, node, bt, btprops, objs=[], do_objects_setup=True, bak
             height_root_ch.use_height_normalize = ori_use_height_normalize
 
     # Recover hack
-    if BL28_HACK and any_normal_ch and tangent_sign_calculation and is_bl_newer_than(2, 80) and not is_bl_newer_than(3):
-        print('INFO: Recovering tangent sign after bake...')
-        # Refresh tangent sign hacks
-        update_enable_tangent_sign_hacks(yp, bpy.context)
 
     # Recover objects setup
     if do_actual_objects_setup:
@@ -3613,30 +3450,6 @@ def bake_channel(
     # Check if baking fake lighting is necessary
     # NOTE: Only needed for Blender 2.80 or less because those are the only versions that can use non-baked fake lighting as bump
     ori_bprops_name = bprops['name'] if bprops else ''
-    if not is_bl_newer_than(2, 81) and root_ch.special_type == 'NORMAL':
-        for lay in yp.layers:
-            if not lay.enable: continue
-            if channel_idx >= len(lay.channels): continue
-            ch = lay.channels[channel_idx]
-            if not ch.enable: continue
-            bake_happened = False
-
-            if lay.type in {'HEMI'} and not lay.use_baked:
-                bprops['name'] = 'Baked ' + lay.name
-                bprops['hdr'] = is_bl_newer_than(2, 80)
-                bake_entity_as_image(lay, bprops, set_image_to_entity=True)
-                bake_happened = True
-
-            for mask in lay.masks:
-                if mask.type in {'HEMI'} and not mask.use_baked:
-                    bprops['name'] = 'Baked ' + mask.name
-                    bprops['hdr'] = is_bl_newer_than(2, 80)
-                    bake_entity_as_image(mask, bprops, set_image_to_entity=True)
-                    bake_happened = True
-
-            if bake_happened:
-                reconnect_layer_nodes(lay)
-                rearrange_layer_nodes(lay)
 
     # Recover bprops name
     if ori_bprops_name != '': bprops['name'] = ori_bprops_name
@@ -3686,7 +3499,7 @@ def bake_channel(
     if root_ch.special_type == 'NORMAL':
 
         # NOTE: Object space normal layers currently will gives less accurate result when baking using BSDF
-        if is_bl_newer_than(2, 80) and not any_object_space_normal(yp):
+        if not any_object_space_normal(yp):
             # Use principled bsdf for Blender 2.80+
             bsdf = mat.node_tree.nodes.new('ShaderNodeBsdfPrincipled')
         else:
@@ -3761,9 +3574,7 @@ def bake_channel(
                     tree, root_ch, 'baked_normal_prep',
                     'ShaderNodeGroup', 'Baked Normal Preparation'
                 )
-                if is_bl_newer_than(2, 80):
-                    baked_normal_prep.node_tree = get_node_tree_lib(lib.NORMAL_MAP_PREP)
-                else: baked_normal_prep.node_tree = get_node_tree_lib(lib.NORMAL_MAP_PREP_LEGACY)
+                baked_normal_prep.node_tree = get_node_tree_lib(lib.NORMAL_MAP_PREP)
 
         # Check if image is available
         if baked.image:
@@ -4225,13 +4036,7 @@ def bake_to_entity(bprops, overwrite_img=None, segment=None):
         rdict['message'] = "Mask need active layer!"
         return rdict
 
-    if bprops.type in {'THICKNESS', 'CURVATURE', 'BEVEL_NORMAL', 'BEVEL_MASK'} and not is_bl_newer_than(2, 80):
-        rdict['message'] = "Blender 2.80+ is needed to use this feature!"
-        return rdict
 
-    if bprops.type in {'MULTIRES_NORMAL', 'MULTIRES_DISPLACEMENT'} and not is_bl_newer_than(2, 80):
-        rdict['message'] = "Blender 2.80+ is needed to use this feature!"
-        return rdict
 
     if (hasattr(obj, 'hide_viewport') and obj.hide_viewport) or obj.hide_render:
         rdict['message'] = "Please unhide render and viewport of the active object!"
@@ -4298,20 +4103,12 @@ def bake_to_entity(bprops, overwrite_img=None, segment=None):
 
             scene_objs = get_scene_objects()
             for oo in bi.other_objects:
-                if is_bl_newer_than(2, 79):
-                    ooo = oo.object
-                else: ooo = scene_objs.get(oo.object_name)
+                ooo = oo.object
 
                 if ooo:
-                    if is_bl_newer_than(2, 80):
-                        # Check if object is on current view layer
-                        layer_cols = get_object_parent_layer_collections([], bpy.context.view_layer.layer_collection, ooo)
-                        if ooo not in other_objs and any(layer_cols):
-                            other_objs.append(ooo)
-                    else:
-                        o = scene_objs.get(ooo.name)
-                        if o and o not in other_objs:
-                            other_objs.append(o)
+                    layer_cols = get_object_parent_layer_collections([], bpy.context.view_layer.layer_collection, ooo)
+                    if ooo not in other_objs and any(layer_cols):
+                        other_objs.append(ooo)
 
         if bprops.type == 'OTHER_OBJECT_EMISSION':
             other_mats, other_sockets, other_defaults, other_alpha_sockets, other_alpha_defaults, ori_mat_no_nodes, instanced_temp_objs = prepare_other_objs_colors(yp, other_objs)
@@ -4348,7 +4145,7 @@ def bake_to_entity(bprops, overwrite_img=None, segment=None):
     use_ssaa = bprops.ssaa and (bprops.type.startswith('OTHER_OBJECT_') or bprops.type == 'WIREFRAME')
 
     # Denoising only available for AO bake for now
-    use_denoise = bprops.denoise and bprops.type in {'AO', 'THICKNESS', 'BEVEL_MASK', 'BEVEL_NORMAL'} and is_bl_newer_than(2, 81)
+    use_denoise = bprops.denoise and bprops.type in {'AO', 'THICKNESS', 'BEVEL_MASK', 'BEVEL_NORMAL'}
 
     # SSAA will multiply size by 2 then resize it back
     if use_ssaa:
@@ -4369,7 +4166,7 @@ def bake_to_entity(bprops, overwrite_img=None, segment=None):
     if (bprops.type == 'CAVITY' and (bprops.subsurf_influence or bprops.use_baked_disp)):
 
         # NOTE: Baking cavity with subdiv setup can only happen if there's only one object and no UDIM
-        if is_bl_newer_than(4, 2) and len(objs) == 1 and not bprops.use_udim and height_root_ch and height_root_ch.enable_subdiv_setup:
+        if len(objs) == 1 and not bprops.use_udim and height_root_ch and height_root_ch.enable_subdiv_setup:
 
             # Check if there's VDM layer
             vdm_layer = get_first_vdm_layer(yp)
@@ -4404,8 +4201,7 @@ def bake_to_entity(bprops, overwrite_img=None, segment=None):
             objs = temp_objs
 
     # Wireframe polygon mode also needs duplicated objects when applying subsurf
-    elif (bprops.type == 'WIREFRAME' and not bprops.wireframe_triangulated and is_bl_newer_than(2, 81)
-          and (bprops.subsurf_influence or bprops.use_baked_disp)):
+    elif (bprops.type == 'WIREFRAME' and not bprops.wireframe_triangulated and (bprops.subsurf_influence or bprops.use_baked_disp)):
         temp_objs.extend(get_duplicated_mesh_objects(scene, objs, True))
         objs = temp_objs
 
@@ -4446,11 +4242,9 @@ def bake_to_entity(bprops, overwrite_img=None, segment=None):
         if bpy.context.tool_settings.mesh_select_mode[0] or bpy.context.tool_settings.mesh_select_mode[1]:
             fill_mode = 'VERTEX'
 
-        if is_bl_newer_than(2, 80):
-            if obj.mode == 'EDIT':
-                edit_objs = [o for o in objs if o.mode == 'EDIT']
-            else: edit_objs = objs
-        else: edit_objs = [obj]
+        if obj.mode == 'EDIT':
+            edit_objs = [o for o in objs if o.mode == 'EDIT']
+        else: edit_objs = objs
 
         for ob in edit_objs:
             mesh = ob.data
@@ -4494,7 +4288,7 @@ def bake_to_entity(bprops, overwrite_img=None, segment=None):
     # Wireframe polygon mode uses a temporary uv with every face reset to the unit
     # square, plus one storing the face world size so the polygon borders can be
     # drawn in world units regardless of triangulation
-    if bprops.type == 'WIREFRAME' and not bprops.wireframe_triangulated and is_bl_newer_than(2, 81):
+    if bprops.type == 'WIREFRAME' and not bprops.wireframe_triangulated:
         for ob in objs:
 
             # Apply subsurf/multires first so the polygons match the baked geometry
@@ -4516,9 +4310,7 @@ def bake_to_entity(bprops, overwrite_img=None, segment=None):
                 # Apply shape keys and modifiers
                 if any(need_to_be_applied_modifiers):
                     if ob.data.shape_keys:
-                        if is_bl_newer_than(3, 3):
-                            bpy.ops.object.shape_key_remove(all=True, apply_mix=True)
-                        else: bpy.ops.object.shape_key_remove(all=True)
+                        bpy.ops.object.shape_key_remove(all=True, apply_mix=True)
 
                     for m in need_to_be_applied_modifiers:
                         bpy.ops.object.modifier_apply(modifier=m.name)
@@ -4654,9 +4446,7 @@ def bake_to_entity(bprops, overwrite_img=None, segment=None):
                 # Apply shape keys and modifiers
                 if any(need_to_be_applied_modifiers):
                     if ob.data.shape_keys:
-                        if is_bl_newer_than(3, 3):
-                            bpy.ops.object.shape_key_remove(all=True, apply_mix=True)
-                        else: bpy.ops.object.shape_key_remove(all=True)
+                        bpy.ops.object.shape_key_remove(all=True, apply_mix=True)
 
                     for m in need_to_be_applied_modifiers:
                         bpy.ops.object.modifier_apply(modifier=m.name)
@@ -4683,7 +4473,7 @@ def bake_to_entity(bprops, overwrite_img=None, segment=None):
                 flow_vcol = get_flow_vcol(ob, main_uv, straight_uv)
 
     # Check if doing actual flip normals operator is needed
-    need_flip_normals = bprops.flip_normals and (bprops.type != 'AO' or alpha_outp or not is_bl_newer_than(2, 80))
+    need_flip_normals = bprops.flip_normals and (bprops.type != 'AO' or alpha_outp)
 
     # Flip normals setup
     if need_flip_normals:
@@ -4729,30 +4519,6 @@ def bake_to_entity(bprops, overwrite_img=None, segment=None):
         # NOTE: This code can freeze blender if there are too many polygons, but it's needed for Blender 2.83 and lower
         ori_mat_ids[ob.name] = []
         ori_loop_locs[ob.name] = []
-        if not is_bl_newer_than(2, 90) and len(ob.data.materials) > 1:
-            active_mat_id = [i for i, m in enumerate(ob.data.materials) if m == mat]
-            if active_mat_id: active_mat_id = active_mat_id[0]
-            else: continue
-
-            # Get uv map
-            uv_layers = get_uv_layers(ob)
-            uvl = uv_layers.get(bprops.uv_map)
-
-            for p in ob.data.polygons:
-
-                # Set uv location to (0,0) if not using current material
-                if uvl and not bprops.force_bake_all_polygons:
-                    uv_locs = []
-                    for li in p.loop_indices:
-                        uv_locs.append(uvl.data[li].uv.copy())
-                        if p.material_index != active_mat_id:
-                            uvl.data[li].uv = Vector((0.0, 0.0))
-
-                    ori_loop_locs[ob.name].append(uv_locs)
-
-                # Need to assign all polygon to active material if there are multiple materials
-                ori_mat_ids[ob.name].append(p.material_index)
-                p.material_index = active_mat_id
 
     # Create bake nodes
     tex = mat.node_tree.nodes.new('ShaderNodeTexImage')
@@ -4779,9 +4545,8 @@ def bake_to_entity(bprops, overwrite_img=None, segment=None):
         vector_math = mat.node_tree.nodes.new('ShaderNodeVectorMath')
         if bprops.edge_detect_method == 'CROSS':
             vector_math.operation = 'CROSS_PRODUCT'
-            if is_bl_newer_than(2, 81):
-                vector_math_1 = mat.node_tree.nodes.new('ShaderNodeVectorMath')
-                vector_math_1.operation = 'LENGTH'
+            vector_math_1 = mat.node_tree.nodes.new('ShaderNodeVectorMath')
+            vector_math_1.operation = 'LENGTH'
         else:
             vector_math.operation = 'DOT_PRODUCT'
             vector_math_1 = mat.node_tree.nodes.new('ShaderNodeMath')
@@ -4813,14 +4578,11 @@ def bake_to_entity(bprops, overwrite_img=None, segment=None):
                 src.inputs['Distance'].default_value = bprops.ao_distance
 
             # Links
-            if not is_bl_newer_than(2, 80):
-                mat.node_tree.links.new(src.outputs[0], output.inputs[0])
-            else:
-                mat.node_tree.links.new(src.outputs['AO'], bsdf.inputs[0])
-                mat.node_tree.links.new(bsdf.outputs[0], output.inputs[0])
+            mat.node_tree.links.new(src.outputs['AO'], bsdf.inputs[0])
+            mat.node_tree.links.new(bsdf.outputs[0], output.inputs[0])
 
-                if bprops.flip_normals:
-                    src.inside = True
+            if bprops.flip_normals:
+                src.inside = True
 
     elif bprops.type == 'THICKNESS':
         src = mat.node_tree.nodes.new('ShaderNodeAmbientOcclusion')
@@ -4840,7 +4602,7 @@ def bake_to_entity(bprops, overwrite_img=None, segment=None):
     elif bprops.type == 'WIREFRAME':
         # Polygon mode draws the border distance on the temporary reset uv,
         # scaled by the face world size so the width is in world units
-        if not bprops.wireframe_triangulated and is_bl_newer_than(2, 81):
+        if not bprops.wireframe_triangulated:
             src = mat.node_tree.nodes.new('ShaderNodeUVMap')
             src.uv_map = TEMP_WIRE_UV
 
@@ -4947,7 +4709,7 @@ def bake_to_entity(bprops, overwrite_img=None, segment=None):
         pointy = src.outputs['Pointiness']
 
         # Map range node
-        if is_bl_newer_than(2, 83) and bprops.normalize:
+        if bprops.normalize:
             map_range = mat.node_tree.nodes.new('ShaderNodeMapRange')
             mat.node_tree.links.new(pointy, map_range.inputs[0])
             pointy = map_range.outputs[0]
@@ -5041,11 +4803,8 @@ def bake_to_entity(bprops, overwrite_img=None, segment=None):
         mat.node_tree.links.new(src.outputs[0], vector_math.inputs[1])
         #mat.node_tree.links.new(src.outputs[0], bsdf.inputs['Normal'])
         if bprops.edge_detect_method == 'CROSS':
-            if is_bl_newer_than(2, 81):
-                mat.node_tree.links.new(vector_math.outputs[0], vector_math_1.inputs[0])
-                mat.node_tree.links.new(vector_math_1.outputs[1], bsdf.inputs[0])
-            else:
-                mat.node_tree.links.new(vector_math.outputs[1], bsdf.inputs[0])
+            mat.node_tree.links.new(vector_math.outputs[0], vector_math_1.inputs[0])
+            mat.node_tree.links.new(vector_math_1.outputs[1], bsdf.inputs[0])
         else:
             mat.node_tree.links.new(vector_math.outputs['Value'], vector_math_1.inputs[1])
             mat.node_tree.links.new(vector_math_1.outputs[0], bsdf.inputs[0])
@@ -5053,12 +4812,8 @@ def bake_to_entity(bprops, overwrite_img=None, segment=None):
         mat.node_tree.links.new(bsdf.outputs[0], output.inputs[0])
 
     elif bprops.type == 'SELECTED_VERTICES':
-        if is_bl_newer_than(2, 80):
-            src = mat.node_tree.nodes.new('ShaderNodeVertexColor')
-            src.layer_name = TEMP_VCOL
-        else:
-            src = mat.node_tree.nodes.new('ShaderNodeAttribute')
-            src.attribute_name = TEMP_VCOL
+        src = mat.node_tree.nodes.new('ShaderNodeVertexColor')
+        src.layer_name = TEMP_VCOL
         mat.node_tree.links.new(src.outputs[0], bsdf.inputs[0])
         mat.node_tree.links.new(bsdf.outputs[0], output.inputs[0])
 
@@ -5337,10 +5092,10 @@ def bake_to_entity(bprops, overwrite_img=None, segment=None):
         # an image whose float setting no longer matches the operator. Per
         # pixel curvature is already stretched around mid grey
         if bprops.type == 'CURVATURE':
-            if is_bl_newer_than(2, 83) and not curv_image:
+            if not curv_image:
                 normalize_image_values(image)
 
-        elif bprops.type == 'POINTINESS' and bprops.normalize and is_bl_newer_than(2, 83):
+        elif bprops.type == 'POINTINESS' and bprops.normalize:
             # Check for highest and lowest value of the baked image
             min_val, max_val = get_image_minmax_value(image)
 
@@ -5693,21 +5448,16 @@ def bake_to_entity(bprops, overwrite_img=None, segment=None):
 
             # Remember other objects to bake info
             for o in other_objs:
-                if is_bl_newer_than(2, 79): 
-                    oo_recorded = any([oo for oo in bi.other_objects if oo.object == o])
-                else: oo_recorded = any([oo for oo in bi.other_objects if oo.object_name == o.name])
+                oo_recorded = any([oo for oo in bi.other_objects if oo.object == o])
 
                 if not oo_recorded:
                     oo = bi.other_objects.add()
-                    if is_bl_newer_than(2, 79): 
-                        oo.object = o
+                    oo.object = o
                     oo.object_name = o.name
 
             # Remove unused other objects on bake info
             for i, oo in reversed(list(enumerate(bi.other_objects))):
-                if is_bl_newer_than(2, 79):
-                    ooo = oo.object
-                else: ooo = bpy.data.objects.get(oo.object_name)
+                ooo = oo.object
 
                 if ooo not in other_objs:
                     bi.other_objects.remove(i)
@@ -5724,8 +5474,7 @@ def bake_to_entity(bprops, overwrite_img=None, segment=None):
             for obj_name, v_indices in obj_vertex_indices.items():
                 ob = bpy.data.objects.get(obj_name)
                 bso = bi.selected_objects.add()
-                if is_bl_newer_than(2, 79):
-                    bso.object = ob
+                bso.object = ob
                 bso.object_name = ob.name
 
                 # Collect selected vertex data to bake info
@@ -5852,11 +5601,9 @@ def bake_to_entity(bprops, overwrite_img=None, segment=None):
     recover_bake_settings(book, yp, mat=mat)
 
     # Hide other objects after baking
-    if is_bl_newer_than(2, 79) and bprops.type.startswith('OTHER_OBJECT_') and other_objs and bprops.hide_source_objects:
+    if bprops.type.startswith('OTHER_OBJECT_') and other_objs and bprops.hide_source_objects:
         for oo in other_objs:
-            if is_bl_newer_than(2, 80):
-                oo.hide_viewport = True
-            else: set_object_hide(oo, True)
+            oo.hide_viewport = True
             oo.hide_render = True
 
     # Remove temporary objects
@@ -6154,7 +5901,7 @@ def bake_entity_as_image(entity, bprops, set_image_to_entity=False):
     bpy.ops.object.bake()
 
     if bprops.blur: 
-        samples = 4096 if is_bl_newer_than(3) else 128
+        samples = 4096
         if bprops.blur_type == 'NOISE':
             noise_blur_image(image, False, bake_device=bake_device, factor=bprops.blur_factor, samples=samples)
         else: blur_image(image, filter_type=bprops.blur_type, size=bprops.blur_size)
@@ -6435,9 +6182,7 @@ def get_merged_mesh_objects(scene, objs, hide_original=False, disable_problemati
         if obj.data.shape_keys:
             # Set active shape to make sure context will be correct
             if not obj.active_shape_key: obj.active_shape_key_index = 0
-            if is_bl_newer_than(3, 3):
-                bpy.ops.object.shape_key_remove(all=True, apply_mix=True)
-            else: bpy.ops.object.shape_key_remove(all=True)
+            bpy.ops.object.shape_key_remove(all=True, apply_mix=True)
 
         # Apply modifiers
         mnames = [m.name for m in obj.modifiers]
@@ -6526,9 +6271,8 @@ def resize_image(image, width, height, colorspace='Non-Color', samples=1, margin
     else: tilenums = [1001]
 
     # Set active collection to be root collection
-    if is_bl_newer_than(2, 80):
-        ori_layer_collection = bpy.context.view_layer.active_layer_collection
-        bpy.context.view_layer.active_layer_collection = bpy.context.view_layer.layer_collection
+    ori_layer_collection = bpy.context.view_layer.active_layer_collection
+    bpy.context.view_layer.active_layer_collection = bpy.context.view_layer.layer_collection
 
     # Create a plane for baking
     plane_obj = create_plane_object()
@@ -6546,10 +6290,6 @@ def resize_image(image, width, height, colorspace='Non-Color', samples=1, margin
     source_tex = mat.node_tree.nodes.new('ShaderNodeTexImage')
     source_tex.image = image
 
-    if not is_bl_newer_than(2, 80) :
-        if image.colorspace_settings.name == get_srgb_name():
-            source_tex.color_space = 'COLOR'
-        else: source_tex.color_space = 'NONE'
 
     straight_over = mat.node_tree.nodes.new('ShaderNodeGroup')
     straight_over.node_tree = get_node_tree_lib(lib.STRAIGHT_OVER)
@@ -6704,8 +6444,7 @@ def resize_image(image, width, height, colorspace='Non-Color', samples=1, margin
     recover_bake_settings(book)
 
     # Recover original active layer collection
-    if is_bl_newer_than(2, 80):
-        bpy.context.view_layer.active_layer_collection = ori_layer_collection
+    bpy.context.view_layer.active_layer_collection = ori_layer_collection
 
     print('RESIZE IMAGE:', image_name, 'Resize image is done in', '{:0.2f}'.format(time.time() - T), 'seconds!')
 
@@ -6745,7 +6484,6 @@ def remove_temp_emit_white_mat():
         remove_datablock(bpy.data.materials, mat)
 
 def get_output_uv_names_from_geometry_nodes(obj):
-    if not is_bl_newer_than(3, 5): return []
 
     uv_layers = get_uv_layers(obj)
     uv_names = []
@@ -6754,8 +6492,8 @@ def get_output_uv_names_from_geometry_nodes(obj):
         if m.type == 'NODES' and m.node_group:
             outputs = get_tree_outputs(m.node_group)
             for outp in outputs:
-                if ((is_bl_newer_than(4) and outp.socket_type == 'NodeSocketVector') or
-                    (not is_bl_newer_than(4) and outp.type == 'VECTOR')):
+                if ((outp.socket_type == 'NodeSocketVector') or
+                    (False)):
                     if is_bl_newer_than(5, 2):
                         uv_name = getattr(m.properties.outputs, outp.identifier).attribute_name
                     else: uv_name = m[outp.identifier + '_attribute_name']

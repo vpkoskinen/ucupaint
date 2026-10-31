@@ -7,6 +7,8 @@ from .node_connections import *
 def check_layer_divider_alpha(layer, tree=None):
     if not tree: tree = get_source_tree(layer)
 
+    # CUSTOM: divider-alpha is an IMAGE/VCOL feature; a referenced group owns its own inputs, so
+    # CUSTOM stays out (deviation table, plan §2.8).
     if layer.enable and layer.divide_rgb_by_alpha and layer.type in {'IMAGE', 'VCOL'}:
         divider_alpha = check_new_mix_node(tree, layer, 'divider_alpha', 'Spread Fix')
         divider_alpha.blend_type = 'DIVIDE'
@@ -65,11 +67,25 @@ def move_mod_groups(layer, from_tree, to_tree):
             mod_group = new_node(to_tree, mg, 'name', 'ShaderNodeGroup', 'modifier_group_' + str(i))
             mod_group.node_tree = mod_tree
 
-def refresh_source_tree_ios(source_tree, layer_type, source):
+def refresh_source_tree_ios(source_tree, layer_type, source, prev_normal=False, entity=None,
+        outer_tree=None):
 
-    # Create input and outputs
-    inp = get_tree_input_by_name(source_tree, 'Vector')
-    if not inp: new_tree_input(source_tree, 'Vector', 'NodeSocketVector')
+    # Nested input contract (P1b review): `Vector` plus `Normal` when the entity reads a previous
+    # normal, plus every source input the flat path feeds from an entity property tunnel (AO
+    # `Distance`, …), derived from the same table the flat connect path uses. Inputs that are no
+    # longer read are pruned, so a source/type change cannot leave dead sockets behind.
+    #
+    # `Vector` only exists when the source consumes it: a custom group without a `Vector` input
+    # must not grow a nested mapping leg (FR-7/FR-18), or removing the input would leave a dead
+    # mapping node behind.
+    base_inputs = []
+    if source is not None and source.inputs.get('Vector') is not None:
+        base_inputs.append(('Vector', 'NodeSocketVector'))
+
+    refresh_nested_source_ios(
+        source_tree, source, layer_type, entity=entity, outer_tree=outer_tree,
+        prev_normal=prev_normal, base_inputs=base_inputs
+    )
 
     valid_output_names = []
     for outp in get_available_source_outputs(source, layer_type):
@@ -107,7 +123,10 @@ def enable_channel_source_tree(layer, root_ch, ch, rearrange = False):
 
         create_essential_nodes(source_tree, True)
 
-        refresh_source_tree_ios(source_tree, ch.override_type, source_ref)
+        refresh_source_tree_ios(
+            source_tree, ch.override_type, source_ref,
+            entity=ch, outer_tree=layer_tree
+        )
 
         # Copy source from reference
         source = new_node(source_tree, ch, 'source', source_ref.bl_idname)
@@ -133,6 +152,13 @@ def enable_channel_source_tree(layer, root_ch, ch, rearrange = False):
 
         layer_tree.nodes.remove(source_ref)
         if linear_ref: layer_tree.nodes.remove(linear_ref)
+
+        # Wire the nested tree and forward the outer instance (P1b).
+        reconnect_nested_source_nodes(
+            source_tree, source, ch.override_type,
+            linear=source_tree.nodes.get(ch.linear)
+        )
+        reconnect_nested_group_inputs(layer_tree, source_group)
 
     # Create uv neighbor
     if ch.override_type in {'VCOL', 'HEMI'}:
@@ -212,9 +238,18 @@ def check_layer_source_tree(layer, smooth_bump_enabled):
     layer_tree = get_tree(layer)
     source_group = layer_tree.nodes.get(layer.source_group)
 
-    if (smooth_bump_enabled and
-        (layer.use_baked or layer.type not in {'VCOL', 'BACKGROUND', 'COLOR', 'GROUP', 'HEMI', 'OBJECT_INDEX', 'BACKFACE', 'EDGE_DETECT', 'MODIFIER', 'PREV_LAYERS'})
-    ):
+    # CUSTOM nests like NOISE for smooth bump / UV neighbour (P1c): its group inputs are declared
+    # on the nested interface and forwarded, so the source and its links stay connected.
+    # The *baked* CUSTOM layer is the exception: the bake path is IMAGE-typed and owns no custom
+    # input contract, so it stays un-nested for every `use_baked` state (FR-27).
+    nested_allowed = (
+        layer.use_baked or
+        layer.type not in {'VCOL', 'BACKGROUND', 'COLOR', 'GROUP', 'HEMI', 'OBJECT_INDEX', 'BACKFACE', 'EDGE_DETECT', 'MODIFIER', 'PREV_LAYERS'}
+    )
+    if layer.type == 'CUSTOM' and layer.use_baked:
+        nested_allowed = False
+
+    if smooth_bump_enabled and nested_allowed:
         # Enable source group
         if not source_group:
             # Get current source for reference
@@ -287,7 +322,30 @@ def check_layer_source_tree(layer, smooth_bump_enabled):
             if layer.use_baked:
                 source = baked_source
                 layer_type = 'IMAGE'
-            refresh_source_tree_ios(source_tree, layer_type, source)
+            # HEMI/EDGE_DETECT/AO read a previous normal; declare it on the nested interface so
+            # the outer instance can carry that stream into the nested source (P1b review).
+            refresh_source_tree_ios(
+                source_tree, layer_type, source,
+                prev_normal=layer.type in {'HEMI', 'EDGE_DETECT', 'AO'},
+                entity=layer, outer_tree=layer_tree
+            )
+
+            # Wire the nested tree and forward the outer instance (P1b). `used_output_names` is
+            # filled by `reconnect_layer_nodes` on the next pass; here all outputs are linked so
+            # the tree is never left disconnected in between.
+            if source:
+                reconnect_nested_source_nodes(
+                    source_tree, source, layer_type,
+                    linear=source_tree.nodes.get(layer.linear),
+                    divider_alpha=source_tree.nodes.get(layer.divider_alpha),
+                    flip_y=source_tree.nodes.get(layer.flip_y),
+                    parent=layer
+                )
+            reconnect_nested_group_inputs(
+                layer_tree, source_group,
+                # HEMI/EDGE_DETECT/AO keep the previous-normal leg; CUSTOM's `Normal` is a stream.
+                prev_normal=layer.type in {'HEMI', 'EDGE_DETECT', 'AO'}
+            )
 
     # Disable source group
     elif source_group:
@@ -296,6 +354,8 @@ def check_layer_source_tree(layer, smooth_bump_enabled):
     # Create uv neighbor
     if smooth_bump_enabled:
 
+        # CUSTOM: the fake neighbour-UV branch is for VCOL/HEMI/EDGE_DETECT only; a custom layer uses
+        # the real texcoord path below, exactly like NOISE (so it is out of this set).
         if layer.type in {'VCOL', 'HEMI', 'EDGE_DETECT'} and not layer.use_baked:
             uv_neighbor = replace_new_node(
                 layer_tree, layer, 'uv_neighbor', 'ShaderNodeGroup', 'Neighbor UV', 
@@ -306,6 +366,7 @@ def check_layer_source_tree(layer, smooth_bump_enabled):
                     layer_tree, layer, 'uv_neighbor_1', 'ShaderNodeGroup', 'Neighbor UV 1', 
                     lib.NEIGHBOR_FAKE, hard_replace=True
                 )
+        # CUSTOM: needs a neighbour-UV node like NOISE; only container/object-space types are skipped.
         elif layer.type not in {'GROUP', 'OBJECT_INDEX', 'BACKFACE', 'MODIFIER', 'PREV_LAYERS'}: 
             uv_neighbor = replace_new_node(
                 layer_tree, layer, 'uv_neighbor', 'ShaderNodeGroup', 'Neighbor UV', 
@@ -445,10 +506,8 @@ def enable_mask_source_tree(layer, mask):
         # Create mask tree
         mask_tree = bpy.data.node_groups.new(MASKGROUP_PREFIX + mask.name, 'ShaderNodeTree')
 
-        # Create input and outputs
-        if mask.type == 'MODIFIER':
-            new_tree_input(mask_tree, 'Value', 'NodeSocketFloat')
-        else: new_tree_input(mask_tree, 'Vector', 'NodeSocketVector')
+        # Create the output here; `reconnect_mask_source_nodes` declares the inputs from what the
+        # flat mask source actually consumes (P1b review).
         new_tree_output(mask_tree, 'Value', 'NodeSocketFloat')
 
         create_essential_nodes(mask_tree)
@@ -488,6 +547,9 @@ def enable_mask_source_tree(layer, mask):
         if baked_source_ref: layer_tree.nodes.remove(baked_source_ref)
         if linear_ref: layer_tree.nodes.remove(linear_ref)
         if separate_color_channels_ref: layer_tree.nodes.remove(separate_color_channels_ref)
+
+        # Wire the nested mask tree and forward the outer instance (P1b).
+        reconnect_mask_source_nodes(mask, layer_tree)
 
 def disable_mask_source_tree(layer, mask):
 
@@ -672,6 +734,8 @@ def check_mask_mix_nodes(layer, tree=None, specific_mask=None, specific_ch=None)
                 else:
                     if remove_node(tree, c, 'mix_remains'): need_reconnect = True
 
+                # CUSTOM: the extra normal mask blend is group/previous-layers only; CUSTOM takes
+                # the plain NOISE path (out of this set).
                 if layer.type in {'GROUP', 'PREV_LAYERS'} and is_layer_using_normal_map(layer):
                     mix_normal = tree.nodes.get(c.mix_normal)
                     if not mix_normal:
@@ -686,6 +750,7 @@ def check_mask_mix_nodes(layer, tree=None, specific_mask=None, specific_ch=None)
                 else:
                     if remove_node(tree, c, 'mix_normal'): need_reconnect = True
 
+                # CUSTOM: the extra vdisp mask blend is group/previous-layers only (out, like NOISE).
                 if layer.type in {'GROUP', 'PREV_LAYERS'} and is_layer_using_vdisp_map(layer):
                     mix_vdisp = tree.nodes.get(c.mix_vdisp)
                     if not mix_vdisp:
@@ -720,6 +785,7 @@ def check_mask_mix_nodes(layer, tree=None, specific_mask=None, specific_ch=None)
                 else:
                     if remove_node(tree, c, 'mix_remains'): need_reconnect = True
 
+            # CUSTOM: the limited mask-blend clamp is group/previous-layers only (out, like NOISE).
             if layer.type in {'GROUP', 'PREV_LAYERS'} and mask.blend_type in limited_mask_blend_types:
 
                 if root_ch.special_type != 'HEIGHT' or not root_ch.enable_smooth_bump and height_process_needed:
@@ -795,11 +861,9 @@ def recover_tangent_sign_process(ori_obj, ori_mode, ori_selects):
     # Recover selected and active objects
     bpy.ops.object.select_all(action='DESELECT')
     for o in ori_selects:
-        if is_bl_newer_than(2, 80): o.select_set(True)
-        else: o.select = True
+        o.select_set(True)
 
-    if is_bl_newer_than(2, 80): bpy.context.view_layer.objects.active = ori_obj
-    else: bpy.context.scene.objects.active = ori_obj
+    bpy.context.view_layer.objects.active = ori_obj
 
     # Back to original mode
     if ori_mode != ori_obj.mode:
@@ -819,12 +883,8 @@ def actual_refresh_tangent_sign_vcol(obj, uv_name):
     ori_selects = [o for o in bpy.context.selected_objects]
     bpy.ops.object.select_all(action='DESELECT')
 
-    if is_bl_newer_than(2, 80): 
-        obj.select_set(True)
-        bpy.context.view_layer.objects.active = obj
-    else: 
-        obj.select = True
-        bpy.context.scene.objects.active = obj
+    obj.select_set(True)
+    bpy.context.view_layer.objects.active = obj
 
     # Set vertex color of bitangent sign
     uv_layers = get_uv_layers(obj)
@@ -847,12 +907,8 @@ def actual_refresh_tangent_sign_vcol(obj, uv_name):
                 return None
 
             # Set default color to be white
-            if is_bl_newer_than(2, 80):
-                for d in vcol.data: 
-                    d.color = (1.0, 1.0, 1.0, 1.0)
-            else: 
-                for d in vcol.data: 
-                    d.color = (1.0, 1.0, 1.0)
+            for d in vcol.data:
+                d.color = (1.0, 1.0, 1.0, 1.0)
 
         # Use try except because ngon can cause error 
         try:
@@ -870,18 +926,14 @@ def actual_refresh_tangent_sign_vcol(obj, uv_name):
                     bs = max(vert.bitangent_sign, 0.0)
                     # Invert bitangent sign so the default value is 0.0 rather than 1.0
                     bs = 1.0 - bs
-                    if is_bl_newer_than(2, 80):
-                        vcol.data[i].color = (bs, bs, bs, 1.0)
-                    else: vcol.data[i].color = (bs, bs, bs)
+                    vcol.data[i].color = (bs, bs, bs, 1.0)
                     i += 1
 
         # If using ngon, need a temporary mesh
         except:
 
             # Remember selection
-            if is_bl_newer_than(2, 80):
-                ori_select = [o for o in bpy.context.view_layer.objects if o.select_get()]
-            else: ori_select = [o for o in bpy.context.scene.objects if o.select]
+            ori_select = [o for o in bpy.context.view_layer.objects if o.select_get()]
 
             # If object has multi users, get all related objects
             related_objs = []
@@ -897,12 +949,8 @@ def actual_refresh_tangent_sign_vcol(obj, uv_name):
             temp_ob.data = obj.data.copy()
             temp_ob.name = '___TEMP__'
 
-            if is_bl_newer_than(2, 80):
-                bpy.context.scene.collection.objects.link(temp_ob)
-                bpy.context.view_layer.objects.active = temp_ob
-            else: 
-                bpy.context.scene.objects.link(temp_ob)
-                bpy.context.scene.objects.active = temp_ob
+            bpy.context.scene.collection.objects.link(temp_ob)
+            bpy.context.view_layer.objects.active = temp_ob
 
             # Triangulate ngon faces on temp object using bmesh
             bm = bmesh.new()
@@ -937,15 +985,11 @@ def actual_refresh_tangent_sign_vcol(obj, uv_name):
                     bs = max(vert.bitangent_sign, 0.0)
                     # Invert bitangent sign so the default value is 0.0 rather than 1.0
                     bs = 1.0 - bs
-                    if is_bl_newer_than(2, 80):
-                        temp_vcol.data[i].color = (bs, bs, bs, 1.0)
-                    else: temp_vcol.data[i].color = (bs, bs, bs)
+                    temp_vcol.data[i].color = (bs, bs, bs, 1.0)
                     i += 1
 
             # Set active object back to the original mesh
-            if is_bl_newer_than(2, 80):
-                bpy.context.view_layer.objects.active = obj
-            else: bpy.context.scene.objects.active = obj
+            bpy.context.view_layer.objects.active = obj
 
             # Number of original modifiers
             num_mods = len(obj.modifiers)
@@ -988,9 +1032,7 @@ def actual_refresh_tangent_sign_vcol(obj, uv_name):
 
             # Set back original select
             for o in ori_select:
-                if is_bl_newer_than(2, 80):
-                    o.select_set(True)
-                else: o.select = True
+                o.select_set(True)
 
             # Bring object data to related objects
             if related_objs:
@@ -1073,11 +1115,7 @@ def check_actual_uv_nodes(yp, uv, obj):
         if not tangent_process:
             # Create tangent process which output both tangent and bitangent
             tangent_process = new_node(tree, uv, 'tangent_process', 'ShaderNodeGroup', uv.name + ' Tangent Process')
-            if is_bl_newer_than(3):
-                tangent_process.node_tree = get_node_tree_lib(lib.TANGENT_PROCESS_300)
-            elif is_bl_newer_than(2, 80):
-                tangent_process.node_tree = get_node_tree_lib(lib.TANGENT_PROCESS)
-            else: tangent_process.node_tree = get_node_tree_lib(lib.TANGENT_PROCESS_LEGACY)
+            tangent_process.node_tree = get_node_tree_lib(lib.TANGENT_PROCESS_300)
             duplicate_lib_node_tree(tangent_process)
 
             tangent_process.inputs['Backface Always Up'].default_value = 1.0 if yp.enable_backface_always_up else 0.0
@@ -1377,12 +1415,6 @@ def clear_parallax_node_data(yp, parallax, baked=False):
         for layer in yp.layers:
             layer.depth_group_node = ''
 
-def check_adaptive_subdiv_nodes(yp, height_ch, baked=False):
-
-    if baked and height_ch.enable_subdiv_setup and height_ch.subdiv_adaptive:
-        pass
-    else:
-        pass
 
 def check_parallax_node(yp, height_ch, unused_uvs=[], unused_texcoords=[], baked=False):
 
@@ -1442,9 +1474,7 @@ def check_parallax_node(yp, height_ch, unused_uvs=[], unused_texcoords=[], baked
         if not baked_parallax_filter:
             baked_parallax_filter = tree.nodes.new('ShaderNodeGroup')
             baked_parallax_filter.name = BAKED_PARALLAX_FILTER
-            if is_bl_newer_than(2, 80):
-                baked_parallax_filter.node_tree = get_node_tree_lib(lib.ENGINE_FILTER)
-            else: baked_parallax_filter.node_tree = get_node_tree_lib(lib.ENGINE_FILTER_LEGACY)
+            baked_parallax_filter.node_tree = get_node_tree_lib(lib.ENGINE_FILTER)
             baked_parallax_filter.label = 'Baked Parallax Filter'
     elif baked_parallax_filter:
         simple_remove_node(tree, baked_parallax_filter, True)
@@ -2011,6 +2041,8 @@ def check_layer_height_channel_nodes(tree, layer, root_ch, ch, need_reconnect=Fa
         #if layer.type == 'GROUP':
         #    lib_name += ' Group'
 
+        # CUSTOM: height processing behaves like NOISE (in this set); only group layers have the
+        # different group height process.
         if layer.type not in {'GROUP', 'PREV_LAYERS'} or ch.enable_transition_bump:
             height_proc, need_reconnect = replace_new_node(
                 tree, ch, 'height_proc', 'ShaderNodeGroup', 'Height Process', 
@@ -2055,6 +2087,7 @@ def check_channel_vdisp_nodes(tree, layer, root_ch, ch, need_reconnect=False):
 
     channel_enabled = get_channel_enabled(ch, layer, root_ch)
 
+    # CUSTOM: vector-displacement processing applies like NOISE; group layers keep their own path.
     if channel_enabled and is_vdisp_process_needed(layer) and layer.type not in {'GROUP', 'PREV_LAYERS'}:
 
         if ch.vdisp_enable_flip_yz:
@@ -2373,6 +2406,7 @@ def check_blend_type_nodes(root_ch, layer, ch):
                 normal_proc.inputs['Distance'].default_value = 1.0
                 normal_proc.inputs['Strength'].default_value = 1.0
 
+            # CUSTOM: a normal-map process node like NOISE; group layers take the branch above.
             elif layer.type not in {'GROUP', 'PREV_LAYERS'}:
                 # Normal map
                 normal_proc, need_reconnect = replace_new_node(tree, ch, 'normal_proc', 'ShaderNodeNormalMap', label='Normal Process', return_status=True)
@@ -2470,14 +2504,6 @@ def check_layer_image_linear_node(layer, source_tree=None):
     yp = layer.id_data.yp
 
     if not source_tree: source_tree = get_source_tree(layer)
-
-    # Blender 2.7x has color space option on the node 
-    if not is_bl_newer_than(2, 80) and layer.type == 'IMAGE':
-        source = get_layer_source(layer)
-        if yp.use_linear_blending:
-            if source.color_space != 'COLOR': source.color_space = 'COLOR'
-        else: 
-            if source.color_space != 'NONE': source.color_space = 'NONE'
 
     gamma = get_layer_gamma_value(layer)
 

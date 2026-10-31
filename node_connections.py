@@ -1,5 +1,5 @@
 from .common import *
-from . import ListItem
+from . import ListItem, custom_node_common
 
 def create_link(tree, out, inp):
     node = inp.node
@@ -466,20 +466,33 @@ def reconnect_yp_nodes(tree, merged_layer_ids = []):
 
                     col_preview = get_essential_node(tree, TREE_END).get(LAYER_VIEWER)
                     alpha_preview = get_essential_node(tree, TREE_END).get(LAYER_ALPHA_VIEWER)
+                    # The layer's viewer outputs are yp-wide state, created for every layer tree
+                    # while layer preview mode is on. A socket can still be missing mid-rebuild
+                    # (the tree was just rebuilt and this pass runs before the owner is refreshed),
+                    # so tolerate its absence instead of raising (P1a).
+                    col_preview_soc = node.outputs.get(LAYER_VIEWER)
+                    alpha_preview_soc = node.outputs.get(LAYER_ALPHA_VIEWER)
+                    # CUSTOM: a missing group previews like a disabled layer (nothing to show).
+                    layer_hidden = not layer.enable or (
+                        layer.type == 'CUSTOM' and not custom_node_common.is_custom_layer_group_usable(layer))
                     if col_preview:
                         #create_link(tree, rgb, col_preview)
-                        if not layer.enable:
+                        if layer_hidden:
                             create_link(tree, get_essential_node(tree, ZERO_VALUE)[0], col_preview)
-                        else: create_link(tree, node.outputs[LAYER_VIEWER], col_preview)
+                        elif col_preview_soc: create_link(tree, col_preview_soc, col_preview)
                     if alpha_preview:
-                        if not layer.enable:
+                        if layer_hidden:
                             create_link(tree, get_essential_node(tree, ZERO_VALUE)[0], alpha_preview)
-                        else: create_link(tree, node.outputs[LAYER_ALPHA_VIEWER], alpha_preview)
+                        elif alpha_preview_soc: create_link(tree, alpha_preview_soc, alpha_preview)
 
             if (
                 #(merged_layer_ids and j not in merged_layer_ids and not is_hidden)
                 (merged_layer_ids and j not in merged_layer_ids) or
-                not layer.enable
+                not layer.enable or
+                # CUSTOM: a layer whose group is missing or unusable has nothing to contribute, so
+                # it falls through exactly like a disabled layer (FR-16) — the below-layers value
+                # reaches the layer above unchanged.
+                (layer.type == 'CUSTOM' and not custom_node_common.is_custom_layer_group_usable(layer))
                 ):
 
                 if node:
@@ -755,7 +768,10 @@ def reconnect_yp_nodes(tree, merged_layer_ids = []):
     # List of last members
     last_members = []
     for layer in yp.layers:
-        if not layer.enable: continue
+        # CUSTOM: a missing group is treated as disabled here too, or it could become the start of
+        # a group-connection chain it does not belong to (FR-16).
+        if not layer.enable or (layer.type == 'CUSTOM' and not custom_node_common.is_custom_layer_group_usable(layer)):
+            continue
         if is_bottom_member(layer, True):
             last_members.append(layer)
 
@@ -810,10 +826,20 @@ def reconnect_yp_nodes(tree, merged_layer_ids = []):
 
 def reconnect_mask_source_nodes(mask, layer_tree):
 
-    tree = layer_tree
+    # A mask source tree is nested for smooth bump: its nodes live in `mask.group_node` and must
+    # be wired inside that tree (P1b). The outer chain reads the group instance.
+    group_node = layer_tree.nodes.get(mask.group_node)
+    if group_node:
+        tree = group_node.node_tree
+        start = tree.nodes.get(TREE_START)
+        end = tree.nodes.get(TREE_END)
+    else:
+        tree = layer_tree
+        start = end = None
 
     swizzle_enabled = False
     baked_source = tree.nodes.get(mask.baked_source)
+    source = None
 
     if mask.type == 'BACKFACE':
         val = get_essential_node(tree, GEOMETRY)['Backfacing']
@@ -825,11 +851,29 @@ def reconnect_mask_source_nodes(mask, layer_tree):
         source = tree.nodes.get(mask.source)
 
         # Get mask input socket
-        soc = get_mask_input_socket(mask, source)
+        soc = get_mask_input_socket(mask, source) if source else None
         val = soc if soc else get_essential_node(tree, ZERO_VALUE)[0]
 
         if val.type in {'RGBA', 'RGB', 'VECTOR'}:
             swizzle_enabled = True
+
+    # Forward the generated `Start` inputs the mask source consumes (typically `Vector`).
+    if start and source:
+        # Re-sync the nested interface from what the flat mask source actually consumes (P1b
+        # review): the tree-kind input plus every `Start`-fed source input (AO `Distance`, …). This
+        # runs on every reconnect, so a source/type change prunes sockets that are no longer read.
+        contract_source = baked_source if (baked_source and mask.use_baked) else source
+        base_inputs = [('Value', 'NodeSocketFloat')] if mask.type == 'MODIFIER' else [('Vector', 'NodeSocketVector')]
+        refresh_nested_source_ios(
+            tree, contract_source, mask.type, entity=mask, outer_tree=layer_tree,
+            prev_normal=(mask.type in {'HEMI', 'EDGE_DETECT', 'AO'} and not mask.use_baked),
+            base_inputs=base_inputs
+        )
+
+        for inp in source.inputs:
+            outp = start.outputs.get(inp.name)
+            if outp is not None:
+                _link_single(tree, outp, inp)
 
     # Swizzle
     separate_color_channels = tree.nodes.get(mask.separate_color_channels)
@@ -847,6 +891,17 @@ def reconnect_mask_source_nodes(mask, layer_tree):
     # Modifiers
     for mod in mask.modifiers:
         val = reconnect_mask_modifier_nodes(tree, mod, val)
+
+    # Feed the nested mask's `Value` output and read the instance from the outer tree.
+    if end:
+        end_inp = end.inputs.get('Value')
+        if end_inp is None and len(end.inputs) > 0: end_inp = end.inputs[0]
+        _link_single(tree, val, end_inp)
+
+        instance_out = group_node.outputs.get('Value')
+        if instance_out is None and len(group_node.outputs) > 0:
+            instance_out = group_node.outputs[0]
+        return group_node, instance_out
 
     return source, val
 
@@ -927,6 +982,253 @@ def do_height_mask_loops(tree, layer, ch_idx, chain, alpha):
 
     return end_chain, end_chain_crease, pure, remains
 
+def get_custom_source_input_names(layer, source, start_outputs):
+    """Names the flat FR-6 path feeds into a CUSTOM source: `<channel>` and `<channel> Alpha`.
+
+    One rule for both paths (P1c review): `reconnect_custom_source_inputs` (flat) and
+    `get_source_start_input_sockets` (nested declaration) call this, so a group input that matches
+    no channel (e.g. `UVMap UV`) keeps its default in both trees. An input qualifies only when the
+    outer `Start` exposes the same-named output (which is how a channel declares alpha, see
+    `input_outputs`), so a literal `Alpha` has no source. `Vector` stays on the mapping leg (FR-7).
+    """
+    names = []
+    if layer is None or source is None or start_outputs is None: return names
+    yp = getattr(layer.id_data, 'yp', None)
+    if yp is None: return names
+
+    for root_ch in yp.channels:
+        for name in (root_ch.name, root_ch.name + io_suffix['ALPHA']):
+            # CUSTOM: only the literal `Vector` input is reserved for the vector path (FR-7).
+            # Skipping the whole root channel here would also drop `<channel> Alpha`, so a group
+            # input literally named `Vector Alpha` could never be fed.
+            if name == 'Vector': continue
+            if name in names: continue
+            # Sockets are looked up by name on every pass: a group interface can change while a
+            # reconnect is running (FR-11), so a cached socket or an index would dangle.
+            if start_outputs.get(name) is None or source.inputs.get(name) is None: continue
+            names.append(name)
+    return names
+
+def reconnect_custom_source_inputs(tree, layer, source):
+    # FR-6: every input of the user's group named like a root channel (`X`) or like its alpha
+    # (`X Alpha`) receives the layer's incoming (below-layers) stream. Every other input keeps the
+    # user's default, and `Vector` is not touched here — the caller's vector path owns it (FR-7).
+    if tree is None or layer is None or source is None: return
+    # FR-16: an empty source has no group and therefore no inputs to wire.
+    if getattr(source, 'node_tree', None) is None: return
+
+    start_outputs = get_essential_node(tree, TREE_START)
+
+    for name in get_custom_source_input_names(layer, source, start_outputs):
+        outp = start_outputs.get(name)
+        inp = source.inputs.get(name)
+
+        # A stale link from another socket would otherwise sit next to the new one.
+        if inp.links and not any(link.from_socket == outp for link in inp.links):
+            break_input_link(tree, inp)
+
+        create_link(tree, outp, inp)
+
+def _link_single(tree, out, inp):
+    """Link `out` to `inp`, dropping a stale link from another socket first."""
+    if out is None or inp is None: return
+    for link in list(inp.links):
+        if link.from_socket != out:
+            tree.links.remove(link)
+    if not inp.links:
+        tree.links.new(out, inp)
+
+# Source inputs the flat reconnect path feeds from the layer-tree `Start` (an entity property
+# tunnel) rather than from the source node's own settings. Key: source input socket name; value:
+# (layer/mask type, entity property). The flat path (`reconnect_layer_nodes`, through
+# `link_source_start_inputs`), the nested declaration (`get_source_start_input_sockets`) and the
+# inner forwarding all read this table, so a source input is declared, linked and pruned the same
+# way whether or not its tree is nested (P1c review: before the shared loop the flat layer/mask
+# blocks were a second, hard-coded list that could drift from this one).
+source_start_inputs = {
+    'Distance': ('AO', 'ao_distance'),
+    'Radius': ('EDGE_DETECT', 'edge_detect_radius'),
+    'Color ID': ('COLOR_ID', 'color_id'),
+}
+
+def link_source_start_inputs(tree, entity, entity_type, source):
+    """Feed one source's Start-sourced inputs from the outer `Start`.
+
+    The flat path and `get_source_start_input_sockets` (nested declaration) read the same table,
+    so a new Start-fed input cannot be declared on the nested side and left unlinked on the flat
+    side. `source` is the flat source node or, when nested, its `source_group`/`group_node`
+    instance: both expose the same input names. A missing property, tunnel or socket skips the
+    entry instead of raising.
+    """
+    if tree is None or entity is None or source is None: return
+    # `get_essential_node` returns the node's output sockets (like the old inline blocks used).
+    start_outputs = get_essential_node(tree, TREE_START)
+    for name, (type_name, prop_name) in source_start_inputs.items():
+        if type_name != entity_type: continue
+        if not hasattr(entity, prop_name): continue
+        tunnel = get_entity_input_name(entity, prop_name)
+        if not tunnel: continue
+        outp = start_outputs.get(tunnel)
+        inp = source.inputs.get(name)
+        if outp and inp: create_link(tree, outp, inp)
+
+source_input_socket_bl_idnames = {
+    'VALUE': 'NodeSocketFloat',
+    'INT': 'NodeSocketInt',
+    'VECTOR': 'NodeSocketVector',
+    'RGBA': 'NodeSocketColor',
+    'BOOLEAN': 'NodeSocketBool',
+}
+
+def get_source_start_input_sockets(source, layer_type, entity, outer_tree):
+    """`(name, socket_type)` for every source input fed from the outer tree's `Start`.
+
+    Derived rather than hard-coded: an input qualifies when the source has it, `source_start_inputs`
+    names its entity property for this type, and the outer `Start` actually exposes that tunnel (no
+    tunnel means the flat path would not feed it either). `Vector` and `Normal` are owned by the
+    callers: `Vector` rides the vector/mapping leg and `Normal` the bump/Geometry leg.
+
+    CUSTOM reads one rule instead of a table, and it is the same rule the flat path links: the root
+    channel names plus `<channel> Alpha` (P1c review). A group input matching no channel (`UVMap
+    UV`) is therefore left at its default in both trees. `Normal` is fed when it is a channel name;
+    `Vector` stays with the mapping leg (FR-7) and a literal `Alpha` has no same-named `Start`
+    output (the layer stream is `Color Alpha`).
+    """
+    sockets = []
+    if source is None or entity is None or outer_tree is None: return sockets
+    start = outer_tree.nodes.get(TREE_START)
+    if start is None: return sockets
+
+    if layer_type == 'CUSTOM':
+        for name in get_custom_source_input_names(entity, source, start.outputs):
+            inp = source.inputs.get(name)
+            sockets.append((name, source_input_socket_bl_idnames.get(inp.type, 'NodeSocketFloat')))
+        return sockets
+
+    for name, (type_name, prop_name) in source_start_inputs.items():
+        if type_name != layer_type: continue
+        inp = source.inputs.get(name)
+        if inp is None: continue
+        if not hasattr(entity, prop_name): continue
+        tunnel = get_entity_input_name(entity, prop_name)
+        if not tunnel or start.outputs.get(tunnel) is None: continue
+        sockets.append((name, source_input_socket_bl_idnames.get(inp.type, 'NodeSocketFloat')))
+
+    return sockets
+
+def refresh_nested_source_ios(source_tree, source, layer_type, entity=None, outer_tree=None,
+        prev_normal=False, base_inputs=(('Vector', 'NodeSocketVector'),)):
+    """Declare a nested source tree's inputs from what its flat source actually consumes.
+
+    `base_inputs` is the always-present contract of the tree kind (`Vector` for a source tree,
+    `Value` for a modifier mask); the rest is derived by `get_source_start_input_sockets`, and
+    `Normal` is added when the entity reads a previous normal. Inputs that are no longer needed are
+    removed, so re-syncing after a source/type change does not accumulate dead sockets, and two
+    consecutive passes add or remove nothing.
+    """
+    specs = list(base_inputs) if base_inputs else []
+    if prev_normal: specs.append(('Normal', 'NodeSocketVector'))
+    specs += get_source_start_input_sockets(source, layer_type, entity, outer_tree)
+
+    valid_names = []
+    for name, socket_type in specs:
+        if name in valid_names: continue
+        valid_names.append(name)
+        if get_tree_input_by_name(source_tree, name) is None:
+            new_tree_input(source_tree, name, socket_type)
+
+    for inp in reversed(get_tree_inputs(source_tree)):
+        if inp.name not in valid_names:
+            remove_tree_input(source_tree, inp)
+
+def reconnect_nested_group_inputs(tree, group_node, prev_normal=False):
+    """Feed a nested source/mask/channel `*_group` instance from the outer tree's `Start`.
+
+    Sockets are matched by name. `Vector` has no same-named `Start` socket (the layer tree calls
+    it `<uv> UV`), so the caller's vector path feeds that one; inputs whose `Start` tunnel has a
+    different name (`Distance` from `.ao_distance`) are fed by `reconnect_layer_nodes` from the
+    same table the nested declaration uses. Everything else, including the generated channel
+    inputs, is forwarded here.
+
+    `prev_normal` marks the `Normal` input as the previous-normal leg (`HEMI` / `EDGE_DETECT` /
+    `AO`), which `reconnect_layer_nodes` feeds from the bump output or Geometry. For every other
+    source — notably a CUSTOM group input literally named `Normal` — that name is the below-layers
+    normal stream and is forwarded like any other.
+    """
+    if tree is None or group_node is None: return
+    start = tree.nodes.get(TREE_START)
+    if start is None: return
+
+    for inp in group_node.inputs:
+        if inp.name == 'Normal' and prev_normal: continue
+        outp = start.outputs.get(inp.name)
+        if outp is not None:
+            _link_single(tree, outp, inp)
+
+def reconnect_nested_source_nodes(source_tree, source_node, layer_type, linear=None,
+        divider_alpha=None, flip_y=None, parent=None, used_output_names=None,
+        start=None, end=None):
+    """Wire the inside of a generated nested source tree (P1b).
+
+    `Start[name]` feeds the source input of the same name (at least `Vector`); the source's
+    available outputs run through divider-alpha/linear/flip-Y (the first colour stream) and, for
+    the outputs a channel actually binds, the layer's modifier groups, into `End[name]` and
+    `End[name + ' Alpha']`. Every End input is fed exactly once and running it twice adds nothing.
+    """
+    if source_tree is None or source_node is None: return
+
+    start = start or source_tree.nodes.get(TREE_START)
+    end = end or source_tree.nodes.get(TREE_END)
+    if start is None or end is None: return
+
+    # Forward the generated inputs the inner source consumes, by name.
+    for inp in source_node.inputs:
+        outp = start.outputs.get(inp.name)
+        if outp is not None:
+            _link_single(source_tree, outp, inp)
+
+    if parent is not None:
+        if linear is None: linear = source_tree.nodes.get(parent.linear)
+        if divider_alpha is None: divider_alpha = source_tree.nodes.get(parent.divider_alpha)
+        if flip_y is None: flip_y = source_tree.nodes.get(parent.flip_y)
+
+    used = used_output_names if used_output_names is not None else []
+    use_modifiers = parent is not None and used_output_names is not None
+    used_output_idx = 0
+    vec3_found = False
+
+    for outp in get_available_source_outputs(source_node, layer_type):
+        rgb = outp
+        if 'Alpha' in source_node.outputs and outp.name != 'Alpha':
+            alpha = source_node.outputs['Alpha']
+        else: alpha = get_essential_node(source_tree, ONE_VALUE)[0]
+
+        # Divider-alpha/linear/flip-Y apply to the first colour stream only, like the outer chain.
+        if not vec3_found and outp.type in {'RGBA', 'RGB', 'VECTOR'}:
+            vec3_found = True
+
+            if divider_alpha:
+                mixcol0, mixcol1, mixout = get_mix_color_indices(divider_alpha)
+                rgb = create_link(source_tree, rgb, divider_alpha.inputs[mixcol0])[mixout]
+                create_link(source_tree, alpha, divider_alpha.inputs[mixcol1])
+
+            if linear:
+                rgb = create_link(source_tree, rgb, linear.inputs[0])[0]
+
+            if flip_y:
+                rgb = create_link(source_tree, rgb, flip_y.inputs[0])[0]
+
+        # Modifier groups that moved into the nested tree apply only to bound outputs.
+        if use_modifiers and outp.name in used:
+            mod_group = None
+            if used_output_idx < len(parent.mod_groups):
+                mod_group = source_tree.nodes.get(parent.mod_groups[used_output_idx].name)
+            used_output_idx += 1
+            rgb, alpha = reconnect_all_modifier_nodes(source_tree, parent, rgb, alpha, mod_group)
+
+        _link_single(source_tree, rgb, end.inputs.get(outp.name))
+        _link_single(source_tree, alpha, end.inputs.get(outp.name + ' Alpha'))
+
 def reconnect_layer_nodes(layer, ch_idx=-1, merge_mask=False):
     yp = layer.id_data.yp
 
@@ -937,8 +1239,14 @@ def reconnect_layer_nodes(layer, ch_idx=-1, merge_mask=False):
     if not tree: return
     nodes = tree.nodes
 
-    # Get layer source
-    source = get_layer_source(layer, tree)
+    # Get layer source. When the source is nested (smooth bump/UV neighbour), the outer channel
+    # chain must read the `source_group` instance: the inner node lives in another tree and links
+    # across trees are silently dropped by Blender (P1b).
+    source_group = nodes.get(layer.source_group)
+    if source_group:
+        source = source_group
+    else:
+        source = get_layer_source(layer, tree)
 
     texcoord = nodes.get(layer.texcoord)
     blur_vector = nodes.get(layer.blur_vector)
@@ -976,27 +1284,24 @@ def reconnect_layer_nodes(layer, ch_idx=-1, merge_mask=False):
         if tangent and 'Tangent' in bump_process.inputs: create_link(tree, tangent, bump_process.inputs['Tangent'])
         if bitangent and 'Bitangent' in bump_process.inputs: create_link(tree, bitangent, bump_process.inputs['Bitangent'])
 
-    # Edge Detect related
-    if layer.type == 'EDGE_DETECT':
-        edge_detect_radius_val = get_essential_node(tree, TREE_START).get(get_entity_input_name(layer, 'edge_detect_radius'))
-        if edge_detect_radius_val and 'Radius' in source.inputs:
-            create_link(tree, edge_detect_radius_val, source.inputs['Radius'])
-
-    # AO Related
-    elif layer.type == 'AO':
-        ao_distance_val = get_essential_node(tree, TREE_START).get(get_entity_input_name(layer, 'ao_distance'))
-        if ao_distance_val and 'Distance' in source.inputs:
-            create_link(tree, ao_distance_val, source.inputs['Distance'])
+    # Start-fed source inputs (P1c review): one table for the flat and nested paths. `source` is
+    # the source node or, when nested, its `source_group` instance, whose inputs carry the same
+    # names.
+    link_source_start_inputs(tree, layer, layer.type, source)
 
     # Use previous normal
+    # CUSTOM: only HEMI/EDGE_DETECT/AO read the previous normal into their source; CUSTOM has no
+    # such input contract (out, like NOISE).
     if layer.type in {'HEMI', 'EDGE_DETECT', 'AO'}:
-        if layer.hemi_use_prev_normal and bump_process:
+        # The input is optional (a baked nested source has no consumer for it): never abort a
+        # rebuild over it (P1b review).
+        if layer.hemi_use_prev_normal and bump_process and 'Normal' in source.inputs:
             create_link(tree, bump_process.outputs['Normal'], source.inputs['Normal'])
         elif 'Normal' in source.inputs: create_link(tree, get_essential_node(tree, GEOMETRY)['Normal'], source.inputs['Normal'])
 
-    # Baked source
+    # Baked source (nested trees keep it inside `source_group`, so the instance stays the source)
     baked_source = nodes.get(layer.baked_source)
-    if layer.use_baked and baked_source: 
+    if not source_group and layer.use_baked and baked_source:
         source = baked_source
 
     # Texcoord
@@ -1028,16 +1333,20 @@ def reconnect_layer_nodes(layer, ch_idx=-1, merge_mask=False):
             vector = create_link(tree, vector, mapping.inputs[0])[0]
         
         # Layer UV uniform scale value
-        if is_bl_newer_than(2, 81):
-            uniform_scale_value = get_essential_node(tree, TREE_START).get(get_entity_input_name(layer, 'uniform_scale_value'))
-            if uniform_scale_value:
-                if layer.enable_uniform_scale:
-                    create_link(tree, uniform_scale_value, mapping.inputs[3])
-                else:
-                    break_link(tree, uniform_scale_value, mapping.inputs[3])
+        uniform_scale_value = get_essential_node(tree, TREE_START).get(get_entity_input_name(layer, 'uniform_scale_value'))
+        if uniform_scale_value:
+            if layer.enable_uniform_scale:
+                create_link(tree, uniform_scale_value, mapping.inputs[3])
+            else:
+                break_link(tree, uniform_scale_value, mapping.inputs[3])
 
     if vector and 'Vector' in source.inputs:
         create_link(tree, vector, source.inputs['Vector'])
+
+    # CUSTOM: the group's channel-named inputs get the below-layers streams (FR-6). Runs after the
+    # vector path so `Vector` keeps that wiring and is never linked here.
+    if layer.type == 'CUSTOM':
+        reconnect_custom_source_inputs(tree, layer, source)
 
     # Get all available source outputs
     available_outputs = get_available_source_outputs(source, layer.type)
@@ -1067,6 +1376,8 @@ def reconnect_layer_nodes(layer, ch_idx=-1, merge_mask=False):
         # Get main socket
         # NOTE: Always use color socket if override is enabled and the layer is an image or color attribute
         # This is to avoid solid alpha value if 'Alpha' socket is used.
+        # CUSTOM: the solid-alpha shortcut is IMAGE/VCOL only; a custom layer's override is out of
+        # scope (non-goal), so it binds normally like NOISE.
         if layer.type in {'IMAGE', 'VCOL'} and ch.override:
             outp = source.outputs.get('Color')
         elif layer.type == 'PREV_LAYERS':
@@ -1085,7 +1396,27 @@ def reconnect_layer_nodes(layer, ch_idx=-1, merge_mask=False):
         # Set the output as used output
         if outp and outp.name not in used_output_names:
             used_output_names.append(outp.name)
-    
+
+    # Wire the inside of a nested source tree and forward the outer instance's inputs (P1b).
+    if source_group and source_group.node_tree:
+        nested_tree = source_group.node_tree
+        nested_prop = 'baked_source' if layer.use_baked else 'source'
+        nested_source = nested_tree.nodes.get(getattr(layer, nested_prop))
+        if nested_source:
+            reconnect_nested_source_nodes(
+                nested_tree, nested_source,
+                'IMAGE' if layer.use_baked else layer.type,
+                linear=nested_tree.nodes.get(layer.linear),
+                divider_alpha=nested_tree.nodes.get(layer.divider_alpha),
+                flip_y=nested_tree.nodes.get(layer.flip_y),
+                parent=layer, used_output_names=used_output_names
+            )
+        reconnect_nested_group_inputs(
+            tree, source_group,
+            # HEMI/EDGE_DETECT/AO keep the previous-normal leg; CUSTOM's `Normal` is a stream.
+            prev_normal=layer.type in {'HEMI', 'EDGE_DETECT', 'AO'}
+        )
+
     # Dictionary to trace rgb and alpha connections of source socket
     rgb_connections = {}
     alpha_connections = {}
@@ -1172,27 +1503,15 @@ def reconnect_layer_nodes(layer, ch_idx=-1, merge_mask=False):
             if alpha_preview:
                 create_link(tree, mask_val, alpha_preview)
 
-        # Color ID related
-        if mask.type == 'COLOR_ID':
-            color_id_val = get_essential_node(tree, TREE_START).get(get_entity_input_name(mask, 'color_id'))
-            if color_id_val and 'Color ID' in mask_source.inputs:
-                create_link(tree, color_id_val, mask_source.inputs['Color ID'])
-
-        # Edge Detect related
-        elif mask.type == 'EDGE_DETECT':
-            edge_detect_radius_val = get_essential_node(tree, TREE_START).get(get_entity_input_name(mask, 'edge_detect_radius'))
-            if edge_detect_radius_val and 'Radius' in mask_source.inputs:
-                create_link(tree, edge_detect_radius_val, mask_source.inputs['Radius'])
-
-        # AO related
-        elif mask.type == 'AO':
-            ao_distance_val = get_essential_node(tree, TREE_START).get(get_entity_input_name(mask, 'ao_distance'))
-            if ao_distance_val and 'Distance' in mask_source.inputs:
-                create_link(tree, ao_distance_val, mask_source.inputs['Distance'])
+        # Start-fed source inputs (P1c review): one table for the flat and nested paths.
+        # `mask_source` is the source node or the nested `group_node` instance.
+        link_source_start_inputs(tree, mask, mask.type, mask_source)
 
         # Hemi related
-        if mask.type in {'HEMI', 'EDGE_DETECT', 'AO'} and not mask.use_baked: #and 'Normal' in mask_source.inputs:
-            if mask.hemi_use_prev_normal and bump_process:
+        if mask.type in {'HEMI', 'EDGE_DETECT', 'AO'} and not mask.use_baked:
+            # Optional input: a nested mask source whose interface lacks it must fall back, not
+            # abort the rebuild (P1b review).
+            if mask.hemi_use_prev_normal and bump_process and 'Normal' in mask_source.inputs:
                 create_link(tree, bump_process.outputs['Normal'], mask_source.inputs['Normal'])
             elif 'Normal' in mask_source.inputs: create_link(tree, get_essential_node(tree, GEOMETRY)['Normal'], mask_source.inputs['Normal'])
 
@@ -1235,16 +1554,18 @@ def reconnect_layer_nodes(layer, ch_idx=-1, merge_mask=False):
                     if mask_mapping and mask.texcoord_type != 'Decal':
                         mask_vector = create_link(tree, mask_vector, mask_mapping.inputs[0])[0]
 
-                create_link(tree, mask_vector, mask_source.inputs[0])
+                # Bind by name: the nested interface may also declare Start-fed source inputs
+                # (AO `Distance`), so the control input is not reliably at index 0 (P1b review).
+                mask_vector_inp = mask_source.inputs.get('Vector') or mask_source.inputs[0]
+                create_link(tree, mask_vector, mask_vector_inp)
 
                 # Mask UV uniform scale value
-                if is_bl_newer_than(2, 81):
-                    uniform_scale_value = get_essential_node(tree, TREE_START).get(get_entity_input_name(mask, 'uniform_scale_value'))
-                    if uniform_scale_value:
-                        if mask.enable_uniform_scale:
-                            create_link(tree, uniform_scale_value, mask_mapping.inputs[3])
-                        else:
-                            break_link(tree, uniform_scale_value, mask_mapping.inputs[3])
+                uniform_scale_value = get_essential_node(tree, TREE_START).get(get_entity_input_name(mask, 'uniform_scale_value'))
+                if uniform_scale_value:
+                    if mask.enable_uniform_scale:
+                        create_link(tree, uniform_scale_value, mask_mapping.inputs[3])
+                    else:
+                        break_link(tree, uniform_scale_value, mask_mapping.inputs[3])
 
         # Mask root mix
         mmix = nodes.get(mask.mix)
@@ -1372,6 +1693,8 @@ def reconnect_layer_nodes(layer, ch_idx=-1, merge_mask=False):
         alpha = None
 
         # Use alpha of color channel if color channel is enabled
+        # CUSTOM: an alpha channel takes the colour channel's alpha like NOISE; only container
+        # (group/previous-layers) types are excluded.
         if ch == alpha_ch and get_channel_enabled(color_ch, layer) and not color_ch.unpair_alpha and layer.type not in {'GROUP', 'PREV_LAYERS'}:
             if ch_output_names[root_color_ch.name] != None:
                 rgb = alpha_connections[ch_output_names[root_color_ch.name]]
@@ -1439,14 +1762,27 @@ def reconnect_layer_nodes(layer, ch_idx=-1, merge_mask=False):
                     ch_override_color = get_essential_node(tree, TREE_START).get(get_entity_input_name(ch, 'override_color'))
                     if ch_override_color: rgb = ch_override_color
             else:
-                ch_source = nodes.get(ch.source)
+                # A nested override source is read through its `source_group` instance (P1b); the
+                # inner node is in another tree and cannot be linked from the layer tree.
+                ch_source_group = nodes.get(ch.source_group)
+                if ch_source_group:
+                    ch_source = ch_source_group
+                    ch_tree = ch_source_group.node_tree
+                    if ch_tree:
+                        reconnect_nested_source_nodes(
+                            ch_tree, ch_tree.nodes.get(ch.source), ch.override_type,
+                            linear=ch_tree.nodes.get(ch.linear)
+                        )
+                    reconnect_nested_group_inputs(tree, ch_source_group)
+                else:
+                    ch_source = nodes.get(ch.source)
 
             if ch_source:
-                if is_bl_newer_than(2, 81) and ch.override_type == 'VORONOI' and ch.voronoi_feature == 'N_SPHERE_RADIUS':
+                if ch.override_type == 'VORONOI' and ch.voronoi_feature == 'N_SPHERE_RADIUS':
                     rgb = ch_source.outputs['Radius']
                 else: rgb = ch_source.outputs[0]
 
-            if vector and ch.override_type != 'DEFAULT' and 'Vector' in ch_source.inputs:
+            if vector and ch_source and ch.override_type != 'DEFAULT' and 'Vector' in ch_source.inputs:
                 create_link(tree, vector, ch_source.inputs['Vector'])
 
             if is_layer_preview_mode_enabled(yp) and yp.preview_mode_type == 'SPECIFIC_MASK' and ch.active_edit == True:

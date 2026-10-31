@@ -5,9 +5,7 @@ from .node_connections import *
 from . import ListItem, subtree, input_outputs, lib
 
 def setup_color_id_source(mask, source, color_id=None):
-    if is_bl_newer_than(2, 82):
-        source.node_tree = get_node_tree_lib(lib.COLOR_ID_EQUAL_282)
-    else: source.node_tree = get_node_tree_lib(lib.COLOR_ID_EQUAL)
+    source.node_tree = get_node_tree_lib(lib.COLOR_ID_EQUAL_282)
 
     if color_id != None:
         mask.color_id = color_id
@@ -55,7 +53,7 @@ def get_new_mask_name(obj, layer, mask_type, modifier_type='', ignore_images=Fal
             name = get_unique_name(name, bpy.data.images)
         return name
     elif mask_type == 'VCOL' and obj.type == 'MESH':
-        name = 'Mask Attribute' if is_bl_newer_than(3, 2) else 'Mask VCol'
+        name = 'Mask Attribute'
         items = get_vertex_color_names(obj)
         return get_unique_name(name, items, surname)
     elif mask_type == 'MODIFIER':
@@ -119,7 +117,7 @@ def add_new_mask(
     mask.socket_input_name = socket_input_name
 
     # Uniform Scale
-    if is_bl_newer_than(2, 81) and is_mask_using_vector(mask):
+    if is_mask_using_vector(mask):
         mask.enable_uniform_scale = ypup.enable_uniform_uv_scale_by_default
 
     if segment:
@@ -170,7 +168,7 @@ def add_new_mask(
 
     mask.uv_name = uv_name
 
-    if is_mapping_possible(mask_type):
+    if is_mapping_possible(mask_type, mask):
 
         mapping = new_node(tree, mask, 'mapping', 'ShaderNodeMapping', 'Mask Mapping')
         mapping.vector_type = 'POINT' #if segment else 'TEXTURE'

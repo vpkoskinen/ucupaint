@@ -256,6 +256,7 @@ def update_list_item_index(self, context):
         # Disable active edit on masks and overrides if layer is expanded
         if layer_index < len(yp.layers):
             layer = yp.layers[layer_index]
+            # CUSTOM: subitems are image/vertex-colour specific; a custom layer has none (out).
             if layer.expand_subitems and layer.type in {'IMAGE', 'VCOL'}:
                 for mask in layer.masks:
                     if mask.active_edit: mask.active_edit = False

@@ -81,15 +81,9 @@ updater.addon = "ucupaint"
 # Blender version utils
 # -----------------------------------------------------------------------------
 def make_annotations(cls):
-    """Add annotation attribute to fields to avoid Blender 2.8+ warnings"""
-    if not hasattr(bpy.app, "version") or bpy.app.version < (2, 80):
-        return cls
-    if bpy.app.version < (2, 93, 0):
-        bl_props = {k: v for k, v in cls.__dict__.items()
-                    if isinstance(v, tuple)}
-    else:
-        bl_props = {k: v for k, v in cls.__dict__.items()
-                    if isinstance(v, bpy.props._PropertyDeferred)}
+    """Add annotation attribute to fields declared as bpy.props."""
+    bl_props = {k: v for k, v in cls.__dict__.items()
+                if isinstance(v, bpy.props._PropertyDeferred)}
     if bl_props:
         if '__annotations__' not in cls.__dict__:
             setattr(cls, '__annotations__', {})
@@ -101,9 +95,6 @@ def make_annotations(cls):
 
 
 def layout_split(layout, factor=0.0, align=False):
-    """Intermediate method for pre and post blender 2.8 split UI function"""
-    if not hasattr(bpy.app, "version") or bpy.app.version < (2, 80):
-        return layout.split(percentage=factor, align=align)
     return layout.split(factor=factor, align=align)
 
 
@@ -737,11 +728,9 @@ class UpdaterSettingMenu(bpy.types.Menu):
         col = self.layout.column()
 
         if len(updater.tags) == 0:
-            if common.is_bl_newer_than(4, 2):
-                if common.is_online():
-                    col.label(text="Please do 'Check for update' first to be able to change branch!", icon='ERROR')
-                else: col.label(text="You need to enable 'Online Access' in Blender Preferences to be able to change branch!", icon='ERROR')
-            else: col.label(text="You need to be able to access internet to use be able to change branch!", icon='ERROR')
+            if common.is_online():
+                col.label(text="Please do 'Check for update' first to be able to change branch!", icon='ERROR')
+            else: col.label(text="You need to enable 'Online Access' in Blender Preferences to be able to change branch!", icon='ERROR')
     
         for index, tg  in enumerate(updater.tags):
             item_icon = "RADIOBUT_ON" if tg[0] == updater.current_branch or (index == 0 and not updater.using_development_build) else "RADIOBUT_OFF"
@@ -789,12 +778,8 @@ def updater_run_success_popup_handler(scene):
         return
 
     try:
-        if "scene_update_post" in dir(bpy.app.handlers):
-            bpy.app.handlers.scene_update_post.remove(
-                updater_run_success_popup_handler)
-        else:
-            bpy.app.handlers.depsgraph_update_post.remove(
-                updater_run_success_popup_handler)
+        bpy.app.handlers.depsgraph_update_post.remove(
+            updater_run_success_popup_handler)
     except:
         pass
 
@@ -813,12 +798,8 @@ def updater_run_install_popup_handler(scene):
         return
 
     try:
-        if "scene_update_post" in dir(bpy.app.handlers):
-            bpy.app.handlers.scene_update_post.remove(
-                updater_run_install_popup_handler)
-        else:
-            bpy.app.handlers.depsgraph_update_post.remove(
-                updater_run_install_popup_handler)
+        bpy.app.handlers.depsgraph_update_post.remove(
+            updater_run_install_popup_handler)
     except:
         pass
 
@@ -854,22 +835,14 @@ def background_update_callback(update_ready):
         return
 
     # See if we need add to the update handler to trigger the popup.
-    handlers = []
-    if "scene_update_post" in dir(bpy.app.handlers):  # 2.7x
-        handlers = bpy.app.handlers.scene_update_post
-    else:  # 2.8+
-        handlers = bpy.app.handlers.depsgraph_update_post
+    handlers = bpy.app.handlers.depsgraph_update_post
     in_handles = updater_run_install_popup_handler in handlers
 
     if in_handles or ran_auto_check_install_popup:
         return
 
-    if "scene_update_post" in dir(bpy.app.handlers):  # 2.7x
-        bpy.app.handlers.scene_update_post.append(
-            updater_run_install_popup_handler)
-    else:  # 2.8+
-        bpy.app.handlers.depsgraph_update_post.append(
-            updater_run_install_popup_handler)
+    bpy.app.handlers.depsgraph_update_post.append(
+        updater_run_install_popup_handler)
     ran_auto_check_install_popup = True
     updater.print_verbose("Attempted popup prompt")
 
@@ -1006,22 +979,14 @@ def show_reload_popup():
         return
 
     # See if we need add to the update handler to trigger the popup.
-    handlers = []
-    if "scene_update_post" in dir(bpy.app.handlers):  # 2.7x
-        handlers = bpy.app.handlers.scene_update_post
-    else:  # 2.8+
-        handlers = bpy.app.handlers.depsgraph_update_post
+    handlers = bpy.app.handlers.depsgraph_update_post
     in_handles = updater_run_success_popup_handler in handlers
 
     if in_handles or ran_update_success_popup:
         return
 
-    if "scene_update_post" in dir(bpy.app.handlers):  # 2.7x
-        bpy.app.handlers.scene_update_post.append(
-            updater_run_success_popup_handler)
-    else:  # 2.8+
-        bpy.app.handlers.depsgraph_update_post.append(
-            updater_run_success_popup_handler)
+    bpy.app.handlers.depsgraph_update_post.append(
+        updater_run_success_popup_handler)
     ran_update_success_popup = True
 
 
@@ -1300,10 +1265,8 @@ def select_link_function(self, tag):
     # print("before-link",link)
     # print("tag-tag",tag)
     if not from_branch:
-        # if legacy_blender:
         for tg in tag["assets"]:
-            legacy_asset = "legacy" in tg["name"]
-            if self.legacy_blender == legacy_asset:
+            if "legacy" not in tg["name"]:
                 link = tg["browser_download_url"]
                 break
         print("tag-link",link)
@@ -1368,17 +1331,10 @@ def draw_updater_options(context, layout):
 
     row = layout.row()            
     if updater.using_development_build:
-        if updater.legacy_blender:
-            row.label(text="Branch: Master (Blender 2.7x)")
-        else:
-            row.label(text="Branch: "+updater.current_branch)
+        row.label(text="Branch: "+updater.current_branch)
     else:
         row.label(text="Branch: Stable ("+get_version_str(updater.current_version)+")")
-    if updater.legacy_blender:
-        layout.operator(AddonUpdaterUpdateTarget.bl_idname, text="Change Branch", icon="FILE_SCRIPT")
-    else:
-        icon = 'PREFERENCES' if is_bl_newer_than(2, 80) else 'SCRIPTWIN'
-        row.menu(UpdaterSettingMenu.bl_idname, text='', icon=icon)
+    row.menu(UpdaterSettingMenu.bl_idname, text='', icon='PREFERENCES')
 
     if updater.async_checking:
         layout.enabled = False
@@ -1475,7 +1431,6 @@ def register():
     # 			/addons/{__package__}/{__package__}_updater
 
     # Auto create a backup of the addon when installing other versions.
-    #updater.backup_current = not updater.legacy_blender  # True by default
     updater.backup_current = False
 
     # Sample ignore patterns for when creating backup of current during update.
@@ -1548,7 +1503,7 @@ def register():
     # Note: updater.include_branch_list defaults to ['master'] branch if set to
     # none. Example targeting another multiple branches allowed to pull from:
     # updater.include_branch_list = ['master', 'dev']
-    updater.include_branch_list = None # ['master', 'blender_279'] # None is the equivalent = ['master']
+    updater.include_branch_list = None # None is the equivalent of ['master']
 
     # Only allow manual install, thus prompting the user to open
     # the addon's web page to download, specifically: updater.website
@@ -1598,7 +1553,7 @@ def register():
     # If using bpy.utils.register_module(__name__) to register elsewhere
     # in the addon, delete these lines (also from unregister).
     for cls in classes:
-        # Apply annotations to remove Blender 2.8+ warnings, no effect on 2.7
+        # Apply annotations so the operators' bpy.props become Blender annotations
         make_annotations(cls)
         # Comment out this line if using bpy.utils.register_module(__name__)
         bpy.utils.register_class(cls)

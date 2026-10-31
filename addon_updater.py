@@ -46,8 +46,6 @@ from .common import *
 # -----------------------------------------------------------------------------
 # The main class
 # -----------------------------------------------------------------------------
-LEGACY_BRANCH = "blender_279"
-
 class SingletonUpdater:
     """Addon updater service class.
 
@@ -107,7 +105,6 @@ class SingletonUpdater:
         self._check_thread = None
         self._select_link = None
         self.skip_tag = None
-        self.legacy_blender = not is_bl_newer_than(2, 80) 
         self.using_development_build = False
         self.current_branch = None
 
@@ -290,10 +287,7 @@ class SingletonUpdater:
     def include_branch_list(self, value):
         try:
             if value is None:
-                if self.legacy_blender:
-                    self._include_branch_list = [LEGACY_BRANCH]
-                else:
-                    self._include_branch_list = ['master']
+                self._include_branch_list = ['master']
 
             elif not isinstance(value, list) or len(value) == 0:
                 raise ValueError("include_branch_list should be a list of valid branches")
@@ -431,8 +425,6 @@ class SingletonUpdater:
             nm = tag["name"]
             if "label" in tag.keys():
                 label = tag["label"]
-                if label == LEGACY_BRANCH:
-                    label = "Master (Blender 2.7x)"
             else:
                 label = "Stable (" + nm + ")"
             tag_names.append((nm, label, "Select to install " + nm))
@@ -702,16 +694,11 @@ class SingletonUpdater:
             branch = br["name"]
             include = self.get_branch_obj(branch, br["commit"]["sha"])
 
-            if self.legacy_blender:
-                if branch == LEGACY_BRANCH:
-                    self._tags.append(include)
-                    self._include_branch_list.append(branch)
-            elif branch != LEGACY_BRANCH:
-                if branch == "master": 
-                    self._tags = [include] + self._tags
-                else:
-                    self._tags.append(include)
-                self._include_branch_list.append(branch)
+            if branch == "master":
+                self._tags = [include] + self._tags
+            else:
+                self._tags.append(include)
+            self._include_branch_list.append(branch)
 
     def get_branch_obj(self, branch_name, last_commit):
         request_br = self.form_branch_url(branch_name)
@@ -832,8 +819,7 @@ class SingletonUpdater:
         try:
             request = urllib.request.Request(url)
             context = None
-            if is_bl_newer_than(2, 77):
-                context = ssl._create_unverified_context()
+            context = ssl._create_unverified_context()
 
             # Setup private token if appropriate.
             if self._engine.token is not None:
@@ -1057,9 +1043,6 @@ class SingletonUpdater:
         self._json["using_development_build"] = self.using_development_build
         self._json["current_branch"] = self.current_branch
         self._json["last_commit"] = self._last_commit
-        
-        if self.legacy_blender:
-            bpy.ops.wm.save_userpref()
 
         self.save_updater_json()
         self.reload_addon()
@@ -1546,15 +1529,8 @@ class SingletonUpdater:
         self.clear_state()
 
         if dev_mode:
-            if self.legacy_blender:
-                self.get_branches()
-                link = self.select_link(self, self._tags[0]) # last selected branch
-                self._update_ready = True
-                self._update_link = link
-                self.save_updater_json()
-            else:
-                from . import addon_updater_ops 
-                self.check_for_branches_now(addon_updater_ops.ui_refresh)
+            from . import addon_updater_ops
+            self.check_for_branches_now(addon_updater_ops.ui_refresh)
 
 
     def set_tag(self, name):

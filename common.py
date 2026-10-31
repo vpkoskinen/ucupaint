@@ -55,60 +55,30 @@ TEMP_ACTIVE_IMAGE_NODE_NAME = '.YP_TEMP_ACTIVE_IMAGE_NODE'
 def is_bl_newer_than(major, minor=0, patch=0):
     return bpy.app.version >= (major, minor, patch)
 
-def is_bl_equal(major, minor=None, patch=None):
-    if minor == None and patch == None:
-        return bpy.app.version[0] == major
-    elif patch == None:
-        return bpy.app.version[:2] == (major, minor)
-    else:
-        return bpy.app.version == (major, minor, patch)
-
 def is_created_before(major, minor=0, patch=0):
     return bpy.data.version < (major, minor, patch)
 
-if is_bl_newer_than(3, 5):
-    blend_type_items = [
-        ("MIX", "Mix", ""),
-        ("ADD", "Add", ""),
-        ("SUBTRACT", "Subtract", ""),
-        ("MULTIPLY", "Multiply", ""),
-        ("SCREEN", "Screen", ""),
-        ("OVERLAY", "Overlay", ""),
-        ("DIFFERENCE", "Difference", ""),
-        ("DIVIDE", "Divide", ""),
-        ("DARKEN", "Darken", ""),
-        ("LIGHTEN", "Lighten", ""),
-        ("HUE", "Hue", ""),
-        ("SATURATION", "Saturation", ""),
-        ("VALUE", "Value", ""),
-        ("COLOR", "Color", ""),
-        ("SOFT_LIGHT", "Soft Light", ""),
-        ("LINEAR_LIGHT", "Linear Light", ""),
-        ("DODGE", "Dodge", ""),
-        ("BURN", "Burn", ""),
-        ("EXCLUSION", "Exclusion", ""),
-    ]
-else:
-    blend_type_items = [
-        ("MIX", "Mix", ""),
-        ("ADD", "Add", ""),
-        ("SUBTRACT", "Subtract", ""),
-        ("MULTIPLY", "Multiply", ""),
-        ("SCREEN", "Screen", ""),
-        ("OVERLAY", "Overlay", ""),
-        ("DIFFERENCE", "Difference", ""),
-        ("DIVIDE", "Divide", ""),
-        ("DARKEN", "Darken", ""),
-        ("LIGHTEN", "Lighten", ""),
-        ("HUE", "Hue", ""),
-        ("SATURATION", "Saturation", ""),
-        ("VALUE", "Value", ""),
-        ("COLOR", "Color", ""),
-        ("SOFT_LIGHT", "Soft Light", ""),
-        ("LINEAR_LIGHT", "Linear Light", ""),
-        ("DODGE", "Dodge", ""),
-        ("BURN", "Burn", ""),
-    ]
+blend_type_items = [
+    ("MIX", "Mix", ""),
+    ("ADD", "Add", ""),
+    ("SUBTRACT", "Subtract", ""),
+    ("MULTIPLY", "Multiply", ""),
+    ("SCREEN", "Screen", ""),
+    ("OVERLAY", "Overlay", ""),
+    ("DIFFERENCE", "Difference", ""),
+    ("DIVIDE", "Divide", ""),
+    ("DARKEN", "Darken", ""),
+    ("LIGHTEN", "Lighten", ""),
+    ("HUE", "Hue", ""),
+    ("SATURATION", "Saturation", ""),
+    ("VALUE", "Value", ""),
+    ("COLOR", "Color", ""),
+    ("SOFT_LIGHT", "Soft Light", ""),
+    ("LINEAR_LIGHT", "Linear Light", ""),
+    ("DODGE", "Dodge", ""),
+    ("BURN", "Burn", ""),
+    ("EXCLUSION", "Exclusion", ""),
+]
 
 height_blend_type_items = (
     ("MIX", "Mix", ""),
@@ -140,49 +110,27 @@ blend_type_labels = {
     "COMPARE" : "Compare Height",
 }
 
-if is_bl_newer_than(3, 5):
-    mask_blend_type_items = [
-        ("MIX", "Replace", ""),
-        ("ADD", "Add", ""),
-        ("SUBTRACT", "Subtract", ""),
-        ("MULTIPLY", "Multiply", ""),
-        ("SCREEN", "Screen", ""),
-        ("OVERLAY", "Overlay", ""),
-        ("DIFFERENCE", "Difference", ""),
-        ("DIVIDE", "Divide", ""),
-        ("DARKEN", "Darken", ""),
-        ("LIGHTEN", "Lighten", ""),
-        ("HUE", "Hue", ""),
-        ("SATURATION", "Saturation", ""),
-        ("VALUE", "Value", ""),
-        ("COLOR", "Color", ""),
-        ("SOFT_LIGHT", "Soft Light", ""),
-        ("LINEAR_LIGHT", "Linear Light", ""),
-        ("DODGE", "Dodge", ""),
-        ("BURN", "Burn", ""),
-        ("EXCLUSION", "Exclusion", ""),
-    ]
-else:
-    mask_blend_type_items = [
-        ("MIX", "Replace", ""),
-        ("ADD", "Add", ""),
-        ("SUBTRACT", "Subtract", ""),
-        ("MULTIPLY", "Multiply", ""),
-        ("SCREEN", "Screen", ""),
-        ("OVERLAY", "Overlay", ""),
-        ("DIFFERENCE", "Difference", ""),
-        ("DIVIDE", "Divide", ""),
-        ("DARKEN", "Darken", ""),
-        ("LIGHTEN", "Lighten", ""),
-        ("HUE", "Hue", ""),
-        ("SATURATION", "Saturation", ""),
-        ("VALUE", "Value", ""),
-        ("COLOR", "Color", ""),
-        ("SOFT_LIGHT", "Soft Light", ""),
-        ("LINEAR_LIGHT", "Linear Light", ""),
-        ("DODGE", "Dodge", ""),
-        ("BURN", "Burn", ""),
-    ]
+mask_blend_type_items = [
+    ("MIX", "Replace", ""),
+    ("ADD", "Add", ""),
+    ("SUBTRACT", "Subtract", ""),
+    ("MULTIPLY", "Multiply", ""),
+    ("SCREEN", "Screen", ""),
+    ("OVERLAY", "Overlay", ""),
+    ("DIFFERENCE", "Difference", ""),
+    ("DIVIDE", "Divide", ""),
+    ("DARKEN", "Darken", ""),
+    ("LIGHTEN", "Lighten", ""),
+    ("HUE", "Hue", ""),
+    ("SATURATION", "Saturation", ""),
+    ("VALUE", "Value", ""),
+    ("COLOR", "Color", ""),
+    ("SOFT_LIGHT", "Soft Light", ""),
+    ("LINEAR_LIGHT", "Linear Light", ""),
+    ("DODGE", "Dodge", ""),
+    ("BURN", "Burn", ""),
+    ("EXCLUSION", "Exclusion", ""),
+]
 
 voronoi_feature_items = (
     ("F1", "F1", "Compute and return the distance to the closest feature point as well as its position and color"),
@@ -220,7 +168,7 @@ def entity_input_items(self, context):
     else:
         label = layer_type_labels[entity.type]
 
-        if is_bl_newer_than(2, 81) and entity.type == 'VORONOI':
+        if entity.type == 'VORONOI':
             items.append(('RGB', label + ' Color', ''))
             items.append(('ALPHA', label + ' Distance', ''))
         elif entity.type == 'GABOR':
@@ -250,14 +198,6 @@ TANGENT_SIGN_PREFIX = '__tsign_'
 neighbor_directions = ['n', 's', 'e', 'w']
 
 def get_vertex_color_label(capital=11):
-    if not is_bl_newer_than(3, 2):
-
-        if capital == 10:
-            return 'Vertex color'
-        elif capital == 00:
-            return 'vertex color'
-
-        return 'Vertex Color'
 
     if capital == 10:
         return 'Color attribute'
@@ -318,6 +258,7 @@ layer_type_items = (
     ('EDGE_DETECT', 'Edge Detect', ''),
     ('AO', 'Ambient Occlusion', ''),
     ('PREV_LAYERS', 'Previous Layers', ''),
+    ('CUSTOM', 'Custom Node', ''),
 )
 
 mask_type_items = (
@@ -387,6 +328,7 @@ layer_type_labels = {
     'EDGE_DETECT' : 'Edge Detect',
     'AO' : 'Ambient Occlusion',
     'PREV_LAYERS' : 'Previous Layers',
+    'CUSTOM' : 'Custom Node',
 }
 
 mask_type_labels = {
@@ -620,6 +562,7 @@ layer_node_bl_idnames = {
     'MODIFIER' : 'ShaderNodeGroup',
     'AO' : 'ShaderNodeAmbientOcclusion',
     'PREV_LAYERS' : 'NodeGroupInput',
+    'CUSTOM' : 'ShaderNodeGroup',
 }
 
 io_suffix = {
@@ -748,9 +691,6 @@ def get_addon_name():
     return os.path.basename(os.path.dirname(bpy.path.abspath(__file__)))
 
 def get_addon_title():
-    if not is_bl_newer_than(4, 2):
-        bl_info = sys.modules[get_addon_name()].bl_info
-        return bl_info['name']
 
     manifest = get_manifest()
     return manifest['name']
@@ -759,19 +699,10 @@ def get_extra_title():
     return ''
 
 def get_addon_warning():
-    if not is_bl_newer_than(4, 2):
-        bl_info = sys.modules[get_addon_name()].bl_info
-        return bl_info['warning']
 
     return ''
 
 def get_alpha_suffix():
-    if not is_bl_newer_than(4, 2):
-        bl_info = sys.modules[get_addon_name()].bl_info
-        if 'Alpha' in bl_info['warning']:
-            return ' Alpha'
-        elif 'Beta' in bl_info['warning']:
-            return ' Beta'
 
     return ''
 
@@ -779,9 +710,6 @@ def get_version_str(version):
     return str(version).replace(', ', '.').replace('(', '').replace(')', '')
 
 def get_current_version_str():
-    if not is_bl_newer_than(4, 2):
-        bl_info = sys.modules[get_addon_name()].bl_info
-        return str(bl_info['version']).replace(', ', '.').replace('(','').replace(')','')
 
     manifest = get_manifest()
     return manifest['version']
@@ -790,23 +718,17 @@ def get_current_blender_version_str():
     return str(bpy.app.version).replace(', ', '.').replace('(','').replace(')','')
 
 def get_current_version():
-    if not is_bl_newer_than(4, 2):
-        bl_info = sys.modules[get_addon_name()].bl_info
-        return bl_info['version']
 
     manifest = get_manifest()
     return tuple(map(int, manifest['version'].split('.')))
 
 def is_online():
-    return not is_bl_newer_than(4, 2) or bpy.app.online_access
+    return bpy.app.online_access
 
 def is_installed_through_extension_platform():
     return 'bl_ext.blender_org.' in __package__
 
 def get_bpytypes():
-    if not is_bl_newer_than(2, 77):
-        import bpy_types
-        return bpy_types.bpy_types
     return bpy.types
 
 def is_package_module_exists(module_relpath):
@@ -863,7 +785,7 @@ def get_noncolor_name():
 
 def get_linear_color_name():
     names = bpy.types.Image.bl_rna.properties['colorspace_settings'].fixed_type.properties['name'].enum_items.keys()
-    linear_name = 'Linear Rec.709' if is_bl_newer_than(4) else 'Linear'
+    linear_name = 'Linear Rec.709'
 
     if linear_name not in names:
 
@@ -876,69 +798,38 @@ def get_linear_color_name():
     return linear_name
 
 def remove_datablock(blocks, block, user=None, user_prop=''):
-    if is_bl_newer_than(2, 79):
-        blocks.remove(block)
-    elif is_bl_newer_than(2, 78):
-        blocks.remove(block, do_unlink=True)
-    else:
-        if user and user_prop != '':
-            setattr(user, user_prop, None)
-
-        if blocks == bpy.data.objects:
-            # Need to remove object from scene first
-            objs = get_scene_objects()
-            if block.name in objs:
-                objs.unlink(block)
-
-        block.user_clear()
-        blocks.remove(block)
+    blocks.remove(block)
 
 def get_active_object():
-    if is_bl_newer_than(2, 80):
-        return bpy.context.view_layer.objects.active
+    return bpy.context.view_layer.objects.active
     return bpy.context.scene.objects.active
 
 def set_active_object(obj):
-    if is_bl_newer_than(2, 80):
-        if bpy.context.view_layer.objects.active != obj:
-            try: bpy.context.view_layer.objects.active = obj
-            except: print('EXCEPTIION: Cannot set active object!')
-    else: 
-        if bpy.context.scene.objects.active != obj:
-            bpy.context.scene.objects.active = obj
+    if bpy.context.view_layer.objects.active != obj:
+        try: bpy.context.view_layer.objects.active = obj
+        except: print('EXCEPTIION: Cannot set active object!')
 
 def link_object(scene, obj, custom_collection=None):
-    if is_bl_newer_than(2, 80):
-        if custom_collection:
-            custom_collection.objects.link(obj)
-        else: scene.collection.objects.link(obj)
-    else: scene.objects.link(obj)
+    if custom_collection:
+        custom_collection.objects.link(obj)
+    else: scene.collection.objects.link(obj)
 
 def get_object_select(obj):
-    if is_bl_newer_than(2, 80):
-        try: return obj.select_get()
-        except: return False
-    else: return obj.select
+    try: return obj.select_get()
+    except: return False
 
 def set_object_select(obj, val):
-    if is_bl_newer_than(2, 80):
-        obj.select_set(val)
-    else: obj.select = val
+    obj.select_set(val)
 
 def get_object_hide(obj):
-    if is_bl_newer_than(2, 80):
-        return obj.hide_get()
+    return obj.hide_get()
     return obj.hide
 
 def set_object_hide(obj, val):
-    if is_bl_newer_than(2, 80):
-        obj.hide_set(val)
-    else: obj.hide = val
+    obj.hide_set(val)
 
 def get_scene_objects():
-    if is_bl_newer_than(2, 80):
-        return bpy.context.view_layer.objects
-    else: return bpy.context.scene.objects
+    return bpy.context.view_layer.objects
 
 def get_scene_materials():
     objs = get_scene_objects()
@@ -957,20 +848,17 @@ def remove_mesh_obj(obj):
     remove_datablock(bpy.data.meshes, data)
 
 def get_viewport_shade():
-    if is_bl_newer_than(2, 80):
-        return bpy.context.area.spaces[0].shading.type
-    else: return bpy.context.area.spaces[0].viewport_shade
+    return bpy.context.area.spaces[0].shading.type
 
 def is_not_in_material_view():
     space = bpy.context.space_data
     return space.type == 'VIEW_3D' and (
-        (not is_bl_newer_than(2, 80) and space.viewport_shade not in {'MATERIAL', 'RENDERED'}) or 
-        (is_bl_newer_than(2, 80) and space.shading.type not in {'MATERIAL', 'RENDERED'})
+        (False) or
+        (space.shading.type not in {'MATERIAL', 'RENDERED'})
     )
 
 def get_user_preferences():
-    if is_bl_newer_than(2, 80):
-        return bpy.context.preferences.addons[__package__].preferences
+    return bpy.context.preferences.addons[__package__].preferences
     return bpy.context.user_preferences.addons[__package__].preferences
 
 def get_operator_description(operator):
@@ -1019,7 +907,7 @@ def get_active_material(obj=None):
     if not obj:
         if hasattr(bpy.context, 'object'):
             obj = bpy.context.object
-        elif is_bl_newer_than(2, 80):
+        else:
             obj = bpy.context.view_layer.objects.active
 
     if not obj: return None
@@ -1051,12 +939,9 @@ def in_active_279_layer(obj):
         return any([layer for i, layer in enumerate(obj.layers) if layer and scene.layers[i]])
 
 def in_renderable_layer_collection(obj):
-    if is_bl_newer_than(2, 80):
-        layer_cols = get_object_parent_layer_collections([], bpy.context.view_layer.layer_collection, obj)
-        if any([lc for lc in layer_cols if lc.collection.hide_render]): return False
-        return True
-    else:
-        return in_active_279_layer(obj)
+    layer_cols = get_object_parent_layer_collections([], bpy.context.view_layer.layer_collection, obj)
+    if any([lc for lc in layer_cols if lc.collection.hide_render]): return False
+    return True
 
 def is_layer_collection_hidden(obj):
     layer_cols = get_object_parent_layer_collections([], bpy.context.view_layer.layer_collection, obj)
@@ -1334,7 +1219,7 @@ def get_edit_image_editor_space(context):
         window = context.window_manager.windows[window_index]
         if area_index >= 0 and area_index < len(window.screen.areas):
             area = window.screen.areas[area_index]
-            if area.type == 'IMAGE_EDITOR' and (not is_bl_newer_than(2, 80) or area.spaces[0].mode == 'UV'):
+            if area.type == 'IMAGE_EDITOR' and (area.spaces[0].mode == 'UV'):
                 return area.spaces[0]
 
     return None
@@ -1346,7 +1231,7 @@ def get_first_unpinned_image_editor_space(context, return_index=False, uv_edit=F
     for i, window in enumerate(context.window_manager.windows):
         for j, area in enumerate(window.screen.areas):
             if area.type == 'IMAGE_EDITOR':
-                if not uv_edit or not is_bl_newer_than(2, 80) or area.spaces[0].mode == 'UV':
+                if not uv_edit or area.spaces[0].mode == 'UV':
                     img = area.spaces[0].image
                     if not area.spaces[0].use_image_pin and (not img or img.type not in {'RENDER_RESULT', 'COMPOSITING'}):
                         space = area.spaces[0]
@@ -2168,6 +2053,8 @@ def get_node_tree_lib(name):
     if node_tree: return node_tree
 
     # Load from library blend files
+    # Two sibling libraries hold the node groups that need a newer Blender than the base
+    # lib.blend was authored on (2.81 / 2.82); every supported build still loads them.
     lib_found = load_from_lib_blend(name, 'lib.blend')
     if not lib_found:
         lib_found = load_from_lib_blend(name, 'lib_281.blend')
@@ -2436,7 +2323,6 @@ def get_mask_mapping(mask, get_baked=False, layer_tree=None):
     return tree.nodes.get(mask.mapping) if not get_baked else tree.nodes.get(mask.baked_mapping)
 
 def is_image_bright(image):
-    if not is_bl_newer_than(2, 83): return False
 
     # Check average value of the image using numpy
     pxs = numpy.empty(shape=image.size[0] * image.size[1] * 4, dtype=numpy.float32)
@@ -2446,13 +2332,8 @@ def is_image_bright(image):
 def get_image_mask_base_color(mask, image, mask_index):
 
     color = (0, 0, 0, 1)
-    if is_bl_newer_than(2, 83):
-        if is_image_bright(image):
-            color = (1, 1, 1, 1)
-    else:
-        # Set Mask color based on the index and blend type
-        if mask_index > 0 and mask.blend_type not in {'ADD'}:
-            color = (1, 1, 1, 1)
+    if is_image_bright(image):
+        color = (1, 1, 1, 1)
     
     return color
 
@@ -2645,18 +2526,17 @@ def change_vcol_name(yp, obj, src, new_name, layer=None):
                     set_source_vcol_name(csrc, new_name)
 
     # HACK: Blender 3.2+ did not automatically update viewport after vertex color rename
-    if is_bl_newer_than(3, 2):
-        for o in objs:
-            set_active_object(o)
-            if o.mode == 'OBJECT':
-                bpy.ops.object.mode_set(mode='SCULPT')
-                bpy.ops.object.mode_set(mode='OBJECT')
-            else:
-                ori_mode = o.mode
-                bpy.ops.object.mode_set(mode='OBJECT')
-                bpy.ops.object.mode_set(mode=ori_mode)
+    for o in objs:
+        set_active_object(o)
+        if o.mode == 'OBJECT':
+            bpy.ops.object.mode_set(mode='SCULPT')
+            bpy.ops.object.mode_set(mode='OBJECT')
+        else:
+            ori_mode = o.mode
+            bpy.ops.object.mode_set(mode='OBJECT')
+            bpy.ops.object.mode_set(mode=ori_mode)
 
-        set_active_object(obj)
+    set_active_object(obj)
 
 def change_layer_name(yp, obj, src, layer, texes):
     if yp.halt_update: return
@@ -2721,7 +2601,7 @@ def copy_vertex_color_data(obj, source_name, dest_name):
 
     if not source or not dest: return
 
-    num_channels = 4 if is_bl_newer_than(2, 80) else 3
+    num_channels = 4
 
     arr = numpy.zeros(len(source.data) * num_channels)
     source.data.foreach_get('color', arr)
@@ -2744,26 +2624,23 @@ def fill_obj_vertex_colors(obj, vcol_name, color=(1.0, 1.0, 1.0, 1.0), bm=None, 
 
         if not bm_layer:
             # Version-safe layer access
-            if not is_bl_newer_than(3, 2) or vcol.domain == 'CORNER':
+            if vcol.domain == 'CORNER':
                 target_layers = bm.loops.layers
             else: # POINT
                 target_layers = bm.verts.layers
 
             # Data type selection
-            if not is_bl_newer_than(3, 2) or vcol.data_type == 'BYTE_COLOR':
+            if vcol.data_type == 'BYTE_COLOR':
                 bm_layer = target_layers.color.get(vcol_name)
             else: bm_layer = target_layers.float_color.get(vcol_name)
 
         # Do color fill
         if len(color) >= 3:
             # Make sure the color is compatible with older blender versions
-            if not is_bl_newer_than(2, 80):
-                if len(color) > 3:
-                    color = (color[0], color[1], color[2])
-            elif len(color) == 3:
+            if len(color) == 3:
                 color = (color[0], color[1], color[2], 1.0)
 
-            if not is_bl_newer_than(3, 2) or vcol.domain == 'CORNER':
+            if vcol.domain == 'CORNER':
                 for face in bm.faces:
                     for loop in face.loops:
                         loop[bm_layer] = color
@@ -2778,12 +2655,8 @@ def fill_obj_vertex_colors(obj, vcol_name, color=(1.0, 1.0, 1.0, 1.0), bm=None, 
     else:
         ones = numpy.ones(len(vcol.data))
 
-        if is_bl_newer_than(2, 80):
-            vcol.data.foreach_set( "color",
-                numpy.array((color[0] * ones, color[1] * ones, color[2] * ones, color[3] * ones)).T.ravel())
-        else:
-            vcol.data.foreach_set( "color",
-                numpy.array((color[0] * ones, color[1] * ones, color[2] * ones)).T.ravel())
+        vcol.data.foreach_set( "color",
+            numpy.array((color[0] * ones, color[1] * ones, color[2] * ones, color[3] * ones)).T.ravel())
 
 def force_bump_base_value(tree, ch, value):
     col = (value, value, value, 1.0)
@@ -2865,42 +2738,30 @@ def match_group_input(node, key=None, extra_node_names=[]):
                 except: pass
 
 def get_tree_inputs(tree):
-    if not is_bl_newer_than(4):
-        return tree.inputs
 
     return [ui for ui in tree.interface.items_tree if hasattr(ui, 'in_out') and ui.in_out in {'INPUT', 'BOTH'}]
 
 def get_tree_outputs(tree):
-    if not is_bl_newer_than(4):
-        return tree.outputs
 
     return [ui for ui in tree.interface.items_tree if hasattr(ui, 'in_out') and ui.in_out in {'OUTPUT', 'BOTH'}]
 
 def get_tree_input_index_by_name(tree, name):
-    if not is_bl_newer_than(4):
-        ids = [i for i, inp in enumerate(tree.inputs) if inp.name == name]
-    else:
-        inputs = get_tree_inputs(tree)
-        ids = [i for i, inp in enumerate(inputs) if inp.name == name and hasattr(inp, 'in_out') and inp.in_out in {'INPUT', 'BOTH'}]
+    inputs = get_tree_inputs(tree)
+    ids = [i for i, inp in enumerate(inputs) if inp.name == name and hasattr(inp, 'in_out') and inp.in_out in {'INPUT', 'BOTH'}]
 
     if len(ids) > 0: return ids[0]
 
     return -1
 
 def get_tree_output_index_by_name(tree, name):
-    if not is_bl_newer_than(4):
-        ids = [i for i, outp in enumerate(tree.outputs) if outp.name == name]
-    else:
-        outputs = get_tree_outputs(tree)
-        ids = [i for i, outp in enumerate(outputs) if outp.name == name and hasattr(outp, 'in_out') and outp.in_out in {'OUTPUT', 'BOTH'}]
+    outputs = get_tree_outputs(tree)
+    ids = [i for i, outp in enumerate(outputs) if outp.name == name and hasattr(outp, 'in_out') and outp.in_out in {'OUTPUT', 'BOTH'}]
 
     if len(ids) > 0: return ids[0]
 
     return -1
 
 def get_tree_input_by_name(tree, name):
-    if not is_bl_newer_than(4):
-        return tree.inputs.get(name)
 
     inp = [ui for ui in tree.interface.items_tree if ui.name == name and hasattr(ui, 'in_out') and ui.in_out in {'INPUT', 'BOTH'}]
     if inp: return inp[0]
@@ -2908,8 +2769,6 @@ def get_tree_input_by_name(tree, name):
     return None
 
 def get_tree_output_by_name(tree, name):
-    if not is_bl_newer_than(4):
-        return tree.outputs.get(name)
 
     outp = [ui for ui in tree.interface.items_tree if ui.name == name and hasattr(ui, 'in_out') and ui.in_out in {'OUTPUT', 'BOTH'}]
     if outp: return outp[0]
@@ -2929,8 +2788,6 @@ def set_modifier_input_value(mod, socket_name, value):
         mod[inp.identifier] = value
 
 def new_tree_input(tree, name, socket_type, description='', use_both=False):
-    if not is_bl_newer_than(4):
-        return tree.inputs.new(socket_type, name)
 
     # There's no longer NodeSocketFloatFactor
     subtype = 'NONE'
@@ -2959,8 +2816,6 @@ def new_tree_input(tree, name, socket_type, description='', use_both=False):
     return inp
 
 def new_tree_output(tree, name, socket_type, description='', use_both=False):
-    if not is_bl_newer_than(4):
-        return tree.outputs.new(socket_type, name)
 
     # There's no longer NodeSocketFloatFactor
     if socket_type == 'NodeSocketFloatFactor': socket_type = 'NodeSocketFloat'
@@ -2982,9 +2837,6 @@ def new_tree_output(tree, name, socket_type, description='', use_both=False):
     return outp
 
 def remove_tree_input(tree, item):
-    if not is_bl_newer_than(4):
-        tree.inputs.remove(item)
-        return
 
     if item.in_out == 'BOTH':
         item.in_out = 'OUTPUT'
@@ -2992,9 +2844,6 @@ def remove_tree_input(tree, item):
         tree.interface.remove(item)
 
 def remove_tree_output(tree, item):
-    if not is_bl_newer_than(4):
-        tree.outputs.remove(item)
-        return
 
     if item.in_out == 'BOTH':
         item.in_out = 'INPUT'
@@ -3002,8 +2851,6 @@ def remove_tree_output(tree, item):
         tree.interface.remove(item)
 
 def get_tree_input_by_index(tree, index):
-    if not is_bl_newer_than(4):
-        return tree.inputs[index]
 
     i = -1
     for item in tree.interface.items_tree:
@@ -3016,8 +2863,6 @@ def get_tree_input_by_index(tree, index):
     return None
 
 def get_tree_output_by_index(tree, index):
-    if not is_bl_newer_than(4):
-        return tree.outputs[index]
 
     i = -1
     for item in tree.interface.items_tree:
@@ -3540,11 +3385,37 @@ def get_udim_segment_mapping_offset(segment):
         tiles_height = get_udim_segment_tiles_height(seg)
         offset_y += tiles_height + 1
 
-def is_mapping_possible(entity_type):
+def get_entity_custom_group(entity):
+    # The user group a CUSTOM entity's source points at: the `custom_group` pointer first (T-7a,
+    # ADR-0002), then the source node's tree as the fallback for a layer built before the pointer
+    # existed. Kept here rather than in custom_node_common.py because that module imports this one;
+    # None for every other type and for the missing-group fallback (FR-16).
+    if entity is None or getattr(entity, 'type', '') != 'CUSTOM': return None
+
+    group = getattr(entity, 'custom_group', None)
+    if group is not None: return group
+
+    source = get_layer_source(entity)
+    return getattr(source, 'node_tree', None) if source is not None else None
+
+def is_custom_vector_using(entity):
+    # CUSTOM: the vector path is enabled by a declared `Vector` input and nothing else (FR-7,
+    # FR-18 — without it the mapping node would be dead weight).
+    group = get_entity_custom_group(entity)
+    if group is None: return False
+
+    return get_tree_input_by_name(group, 'Vector') is not None
+
+def is_mapping_possible(entity_type, entity=None):
+    # CUSTOM: mapping is possible only when the referenced group declares a `Vector` input; the
+    # answer lives in the group, not in the type, so `entity=None` means "no group in hand" → no
+    # mapping (FR-7, FR-18).
+    if entity_type == 'CUSTOM': return is_custom_vector_using(entity)
+
     return entity_type not in {'VCOL', 'BACKGROUND', 'COLOR', 'GROUP', 'HEMI', 'OBJECT_INDEX', 'COLOR_ID', 'BACKFACE', 'EDGE_DETECT', 'MODIFIER', 'AO', 'PREV_LAYERS'} 
 
 def is_udim_supported():
-    return is_bl_newer_than(3, 3)
+    return True
 
 def clear_mapping(entity, use_baked=False):
 
@@ -3555,14 +3426,9 @@ def clear_mapping(entity, use_baked=False):
     else: mapping = get_mask_mapping(entity, use_baked)
 
     if mapping:
-        if is_bl_newer_than(2, 81):
-            mapping.inputs[1].default_value = (0.0, 0.0, 0.0)
-            mapping.inputs[2].default_value = (0.0, 0.0, 0.0)
-            mapping.inputs[3].default_value = (1.0, 1.0, 1.0)
-        else:
-            mapping.translation = (0.0, 0.0, 0.0)
-            mapping.rotation = (0.0, 0.0, 0.0)
-            mapping.scale = (1.0, 1.0, 1.0)
+        mapping.inputs[1].default_value = (0.0, 0.0, 0.0)
+        mapping.inputs[2].default_value = (0.0, 0.0, 0.0)
+        mapping.inputs[3].default_value = (1.0, 1.0, 1.0)
 
 def update_mapping(entity, use_baked=False):
 
@@ -3619,14 +3485,9 @@ def update_mapping(entity, use_baked=False):
             offset_x = scale_x * segment.tile_x + offset_x * scale_x
             offset_y = scale_y * segment.tile_y + offset_y * scale_y
 
-    if is_bl_newer_than(2, 81):
-        mapping.inputs[1].default_value = (offset_x, offset_y, offset_z)
-        mapping.inputs[2].default_value = entity.rotation
-        mapping.inputs[3].default_value = (scale_x, scale_y, scale_z)
-    else:
-        mapping.translation = (offset_x, offset_y, offset_z)
-        mapping.rotation = entity.rotation
-        mapping.scale = (scale_x, scale_y, scale_z)
+    mapping.inputs[1].default_value = (offset_x, offset_y, offset_z)
+    mapping.inputs[2].default_value = entity.rotation
+    mapping.inputs[3].default_value = (scale_x, scale_y, scale_z)
 
     if entity.type == 'IMAGE' and entity.texcoord_type == 'UV':
         if hasattr(bpy.context, 'object') and bpy.context.object and bpy.context.object.mode == 'TEXTURE_PAINT':
@@ -3646,20 +3507,14 @@ def get_transformation(mapping, entity=None):
     rotation = (0.0, 0.0, 0.0)
     scale = (1.0, 1.0, 1.0)
 
-    if is_bl_newer_than(2, 81):
-        translation = mapping.inputs[1].default_value
-        rotation = mapping.inputs[2].default_value
+    translation = mapping.inputs[1].default_value
+    rotation = mapping.inputs[2].default_value
 
-        if entity and hasattr(entity, 'enable_uniform_scale') and entity.enable_uniform_scale:
-            scale_val = get_entity_prop_value(entity, 'uniform_scale_value')
-            scale = (scale_val, scale_val, scale_val)
-        else:
-            scale = mapping.inputs[3].default_value
-    
+    if entity and hasattr(entity, 'enable_uniform_scale') and entity.enable_uniform_scale:
+        scale_val = get_entity_prop_value(entity, 'uniform_scale_value')
+        scale = (scale_val, scale_val, scale_val)
     else:
-        translation = mapping.translation
-        rotation = mapping.rotation
-        scale = mapping.scale
+        scale = mapping.inputs[3].default_value
 
     return translation, rotation, scale
 
@@ -3764,9 +3619,7 @@ def set_uv_mirror_offsets(obj, matrix):
     if not mirror: return
 
     movec = Vector((mirror.mirror_offset_u / 2, mirror.mirror_offset_v / 2, 0.0))
-    if is_bl_newer_than(2, 80):
-        movec = matrix @ movec
-    else: movec = matrix * movec
+    movec = matrix @ movec
 
     if mirror.use_mirror_u:
         obj.yp.ori_mirror_offset_u = mirror.mirror_offset_u
@@ -3776,12 +3629,11 @@ def set_uv_mirror_offsets(obj, matrix):
         obj.yp.ori_mirror_offset_v = mirror.mirror_offset_v
         mirror.mirror_offset_v = movec.y * 2 - (1.0 - matrix[1][1])
 
-    if is_bl_newer_than(2, 80):
-        obj.yp.ori_offset_u = mirror.offset_u
-        mirror.offset_u *= matrix[0][0]
+    obj.yp.ori_offset_u = mirror.offset_u
+    mirror.offset_u *= matrix[0][0]
 
-        obj.yp.ori_offset_v = mirror.offset_v
-        mirror.offset_v *= matrix[1][1]
+    obj.yp.ori_offset_v = mirror.offset_v
+    mirror.offset_v *= matrix[1][1]
 
 def remove_temp_uv(obj, entity):
     uv_layers = get_uv_layers(obj)
@@ -3824,11 +3676,10 @@ def remove_temp_uv(obj, entity):
             try: mirror.mirror_offset_v = obj.yp.ori_mirror_offset_v
             except: print('EXCEPTIION: Cannot set modifier mirror offset!')
 
-        if is_bl_newer_than(2, 80):
-            try: mirror.offset_u = obj.yp.ori_offset_u
-            except: print('EXCEPTIION: Cannot set modifier mirror offset!')
-            try: mirror.offset_v = obj.yp.ori_offset_v
-            except: print('EXCEPTIION: Cannot set modifier mirror offset!')
+        try: mirror.offset_u = obj.yp.ori_offset_u
+        except: print('EXCEPTIION: Cannot set modifier mirror offset!')
+        try: mirror.offset_v = obj.yp.ori_offset_v
+        except: print('EXCEPTIION: Cannot set modifier mirror offset!')
 
 def refresh_temp_uv(obj, entity): 
     if not obj or obj.type != 'MESH':
@@ -3878,9 +3729,6 @@ def refresh_temp_uv(obj, entity):
             try: uv_layers.active = entity_uv
             except: print('EXCEPTIION: Cannot set active uv!')
         # NOTE: Blender 2.90 or lower need to use active render so the UV in image editor paint mode is updated
-        if not is_bl_newer_than(2, 91) and not entity_uv.active_render:
-            try: entity_uv.active_render = True
-            except: print('EXCEPTIION: Cannot set active uv render!')
 
     # Delete previous temp uv
     remove_temp_uv(obj, entity)
@@ -3948,26 +3796,22 @@ def refresh_temp_uv(obj, entity):
     try: uv_layers.active = temp_uv_layer
     except: print('EXCEPTIION: Cannot set temporary UV!')
     # NOTE: Blender 2.90 or lower need to use active render so the UV in image editor paint mode is updated
-    if not is_bl_newer_than(2, 91):
-        temp_uv_layer.active_render = True
 
-    if not is_bl_newer_than(2, 80):
-        temp_uv_layer = obj.data.uv_layers.get(TEMP_UV)
 
-    translation_x = mapping.inputs[1].default_value[0] if is_bl_newer_than(2, 81) else mapping.translation[0]
-    translation_y = mapping.inputs[1].default_value[1] if is_bl_newer_than(2, 81) else mapping.translation[1]
-    translation_z = mapping.inputs[1].default_value[2] if is_bl_newer_than(2, 81) else mapping.translation[2]
+    translation_x = mapping.inputs[1].default_value[0]
+    translation_y = mapping.inputs[1].default_value[1]
+    translation_z = mapping.inputs[1].default_value[2]
 
-    rotation_x = mapping.inputs[2].default_value[0] if is_bl_newer_than(2, 81) else mapping.rotation[0]
-    rotation_y = mapping.inputs[2].default_value[1] if is_bl_newer_than(2, 81) else mapping.rotation[1]
-    rotation_z = mapping.inputs[2].default_value[2] if is_bl_newer_than(2, 81) else mapping.rotation[2]
+    rotation_x = mapping.inputs[2].default_value[0]
+    rotation_y = mapping.inputs[2].default_value[1]
+    rotation_z = mapping.inputs[2].default_value[2]
 
-    if hasattr(entity, 'enable_uniform_scale') and entity.enable_uniform_scale and is_bl_newer_than(2, 81):
+    if hasattr(entity, 'enable_uniform_scale') and entity.enable_uniform_scale:
         scale_x = scale_y = scale_z = get_entity_prop_value(entity, 'uniform_scale_value')
     else:
-        scale_x = mapping.inputs[3].default_value[0] if is_bl_newer_than(2, 81) else mapping.scale[0]
-        scale_y = mapping.inputs[3].default_value[1] if is_bl_newer_than(2, 81) else mapping.scale[1]
-        scale_z = mapping.inputs[3].default_value[2] if is_bl_newer_than(2, 81) else mapping.scale[2]
+        scale_x = mapping.inputs[3].default_value[0]
+        scale_y = mapping.inputs[3].default_value[1]
+        scale_z = mapping.inputs[3].default_value[2]
 
     # Remember the transformation to object props
     obj.yp.texpaint_translation = (translation_x, translation_y, translation_z)
@@ -4028,40 +3872,22 @@ def refresh_temp_uv(obj, entity):
     arr.shape = (arr.shape[0] // 2, 2)
 
     # Matrix transformation for each uv coordinates
-    if is_bl_newer_than(2, 80):
-        if mapping.vector_type == 'TEXTURE':
-            for uv in arr:
-                vec = Vector((uv[0], uv[1], 0.0)) #, 1.0))
-                vec = m @ vec
-                vec = m1 @ vec
-                vec = m2 @ vec
-                vec = m3 @ vec
-                vec = m4 @ vec
-                uv[0] = vec[0]
-                uv[1] = vec[1]
-        else:
-            for uv in arr:
-                vec = Vector((uv[0], uv[1], 0.0)) #, 1.0))
-                vec = m @ vec
-                uv[0] = vec[0]
-                uv[1] = vec[1]
+    if mapping.vector_type == 'TEXTURE':
+        for uv in arr:
+            vec = Vector((uv[0], uv[1], 0.0)) #, 1.0))
+            vec = m @ vec
+            vec = m1 @ vec
+            vec = m2 @ vec
+            vec = m3 @ vec
+            vec = m4 @ vec
+            uv[0] = vec[0]
+            uv[1] = vec[1]
     else:
-        if mapping.vector_type == 'TEXTURE':
-            for uv in arr:
-                vec = Vector((uv[0], uv[1], 0.0)) #, 1.0))
-                vec = m * vec
-                vec = m1 * vec
-                vec = m2 * vec
-                vec = m3 * vec
-                vec = m4 * vec
-                uv[0] = vec[0]
-                uv[1] = vec[1]
-        else:
-            for uv in arr:
-                vec = Vector((uv[0], uv[1], 0.0)) #, 1.0))
-                vec = m * vec
-                uv[0] = vec[0]
-                uv[1] = vec[1]
+        for uv in arr:
+            vec = Vector((uv[0], uv[1], 0.0)) #, 1.0))
+            vec = m @ vec
+            uv[0] = vec[0]
+            uv[1] = vec[1]
 
     # Set back uv coordinates
     temp_uv_layer.data.foreach_set('uv', arr.ravel())
@@ -4451,6 +4277,8 @@ def get_layer_channel_type(layer, ch):
     return None
 
 def is_bump_distance_relevant(layer, ch):
+    # CUSTOM: transition-bump distance is a COLOR/BACKGROUND-only parameter; CUSTOM keeps the
+    # default "distance is relevant" answer, like NOISE (out of this set).
     if layer.type in {'COLOR', 'BACKGROUND'} and ch.enable_transition_bump:
         return False
     return True
@@ -4898,9 +4726,7 @@ def update_layer_images_interpolation(layer, interpolation='Linear', from_interp
 def get_uv_layers(obj):
     if obj.type != 'MESH': return []
 
-    if not is_bl_newer_than(2, 80):
-        uv_layers = obj.data.uv_textures
-    else: uv_layers = obj.data.uv_layers
+    uv_layers = obj.data.uv_layers
 
     return uv_layers
 
@@ -4929,16 +4755,12 @@ def move_vcol_to_bottom(obj, index):
     ori_name = vcols.active.name
 
     # Duplicate vcol
-    if is_bl_newer_than(3, 3):
-        bpy.ops.geometry.color_attribute_duplicate()
-    else: bpy.ops.mesh.vertex_color_add()
+    bpy.ops.geometry.color_attribute_duplicate()
 
     # Delete old vcol
     vcols.active_index = index
 
-    if is_bl_newer_than(3, 3):
-        bpy.ops.geometry.color_attribute_remove()
-    else: bpy.ops.mesh.vertex_color_remove()
+    bpy.ops.geometry.color_attribute_remove()
 
     # Set original name to newly created uv
     vcols[-1].name = ori_name
@@ -5008,8 +4830,6 @@ def move_uv(obj, from_index, to_index):
 def get_vertex_colors(obj):
     if not obj or obj.type != 'MESH': return []
 
-    if not is_bl_newer_than(3, 2):
-        return obj.data.vertex_colors
 
     return obj.data.color_attributes
 
@@ -5020,8 +4840,8 @@ def get_vertex_color_names_from_geonodes(obj):
         if mod.type == 'NODES' and mod.node_group:
             outputs = get_tree_outputs(mod.node_group)
             for i, outp in enumerate(outputs):
-                if ((is_bl_newer_than(4) and outp.socket_type == 'NodeSocketColor') or
-                    (not is_bl_newer_than(4) and outp.type == 'RGBA')):
+                if ((outp.socket_type == 'NodeSocketColor') or
+                    (False)):
                     if is_bl_newer_than(5, 2):
                         name = getattr(mod.properties.outputs, outp.identifier).attribute_name
                     else: name = mod[outp.identifier + '_attribute_name']
@@ -5036,12 +4856,8 @@ def get_vertex_color_names(obj):
     vcol_names = []
 
     # Check vertex colors / color attributes
-    if not is_bl_newer_than(3, 2):
-        if hasattr(obj.data, 'vertex_colors'):
-            vcol_names = [v.name for v in obj.data.vertex_colors]
-    else:
-        if hasattr(obj.data, 'color_attributes'):
-            vcol_names = [v.name for v in obj.data.color_attributes]
+    if hasattr(obj.data, 'color_attributes'):
+        vcol_names = [v.name for v in obj.data.color_attributes]
 
     # Check geometry nodes outputs
     vcol_names.extend(get_vertex_color_names_from_geonodes(obj))
@@ -5051,23 +4867,17 @@ def get_vertex_color_names(obj):
 def get_active_vertex_color(obj):
     if not obj or obj.type != 'MESH': return None
 
-    if not is_bl_newer_than(3, 2):
-        return obj.data.vertex_colors.active
 
     return obj.data.color_attributes.active_color
 
 def set_active_vertex_color(obj, vcol):
     try:
-        if is_bl_newer_than(3, 2):
-            obj.data.color_attributes.active_color = vcol
-            # HACK: Baking to vertex color still use active legacy vertex colors data
-            if hasattr(obj.data, 'vertex_colors'):
-                v = obj.data.vertex_colors.get(vcol.name)
-                if obj.data.vertex_colors.active != v:
-                    obj.data.vertex_colors.active = v
-        else: 
-            if obj.data.vertex_colors.active != vcol:
-                obj.data.vertex_colors.active = vcol
+        obj.data.color_attributes.active_color = vcol
+        # HACK: Baking to vertex color still use active legacy vertex colors data
+        if hasattr(obj.data, 'vertex_colors'):
+            v = obj.data.vertex_colors.get(vcol.name)
+            if obj.data.vertex_colors.active != v:
+                obj.data.vertex_colors.active = v
     except Exception as e: print(e)
 
 def set_active_vertex_color_by_name(obj, vcol_name):
@@ -5086,12 +4896,12 @@ def new_vertex_color(obj, name, data_type='BYTE_COLOR', domain='CORNER', color_f
         bm = bmesh.from_edit_mesh(obj.data)
 
         # Version-safe layer access
-        if not is_bl_newer_than(3, 2) or domain == 'CORNER':
+        if domain == 'CORNER':
             target_layers = bm.loops.layers
         else: target_layers = bm.verts.layers
 
         # Data type selection
-        if not is_bl_newer_than(3, 2) or data_type == 'BYTE_COLOR':
+        if data_type == 'BYTE_COLOR':
             bm_layer = target_layers.color.new(name)
         else: bm_layer = target_layers.float_color.new(name)
 
@@ -5107,9 +4917,7 @@ def new_vertex_color(obj, name, data_type='BYTE_COLOR', domain='CORNER', color_f
     # Create vertex color in non-edit mode
     else:
         # Create new vertex color
-        if not is_bl_newer_than(3, 2):
-            vcol = obj.data.vertex_colors.new(name=name)
-        else: vcol = obj.data.color_attributes.new(name, data_type, domain)
+        vcol = obj.data.color_attributes.new(name, data_type, domain)
 
         vcol_name = vcol.name
 
@@ -5163,9 +4971,7 @@ def get_default_uv_name(obj=None, yp=None):
         temp_mesh = bpy.data.meshes.new('___TEMP___')
 
         # Create temporary uv layer
-        if not is_bl_newer_than(2, 80):
-            uv_layers = temp_mesh.uv_textures
-        else: uv_layers = temp_mesh.uv_layers
+        uv_layers = temp_mesh.uv_layers
         uv_layer = uv_layers.new()
 
         # Get the uv name
@@ -5252,7 +5058,7 @@ def get_material_temp_active_image_node(mat, create_one=False):
     return temp
 
 def check_other_mats_to_use_temp_image(obj):
-    if not is_bl_newer_than(2, 81) or obj.type != 'MESH' or not obj.active_material: return
+    if obj.type != 'MESH' or not obj.active_material: return
 
     active_mat = obj.active_material
 
@@ -5453,11 +5259,7 @@ def set_active_image_for_editor_and_painting(yp):
         ori_editor_imgs, ori_editor_pins = get_editor_images_dict(return_pins=True)
 
         if image:
-            # Always set `Image` paint mode on Blender 2.7x since selecting material image inside a node is not possible
-            if not is_bl_newer_than(2, 80):
-                if scene.tool_settings.image_paint.mode != 'IMAGE':
-                    scene.tool_settings.image_paint.mode = 'IMAGE'
-            elif paint_mode == 'MATERIAL':
+            if paint_mode == 'MATERIAL':
 
                 if mat:
                     for idx, img in enumerate(mat.texture_paint_images):
@@ -5561,8 +5363,6 @@ def get_active_image_and_stuffs(obj, yp):
     return image, uv_name, src_of_img, entity, mapping, vcol
 
 def is_object_work_with_uv(obj):
-    if not is_bl_newer_than(3):
-        return obj.type == 'MESH'
 
     return obj.type in {'MESH', 'CURVE'}
 
@@ -5586,6 +5386,8 @@ def is_uv_input_needed(layer, uv_name):
             return True
 
         if layer.texcoord_type == 'UV' and layer.uv_name == uv_name:
+            # CUSTOM: a custom layer samples UVs like NOISE, so it is in this set (not a
+            # non-UV source such as VCOL/BACKGROUND/COLOR/GROUP/HEMI/EDGE_DETECT/AO/PREV).
             if layer.type not in {'VCOL', 'BACKGROUND', 'COLOR', 'GROUP', 'HEMI', 'EDGE_DETECT', 'AO', 'PREV_LAYERS'}:
                 return True
 
@@ -5709,6 +5511,7 @@ def is_height_process_needed(layer):
 
     if is_layer_preview_mode_enabled(yp) and height_ch.normal_map_type != 'VECTOR_DISPLACEMENT_MAP': return True
 
+    # CUSTOM: group layers derive height from their children; CUSTOM is a leaf source like NOISE.
     if layer.type in {'GROUP', 'PREV_LAYERS'}: 
         if is_layer_using_bump_map(layer, height_root_ch):
             return True
@@ -5727,6 +5530,7 @@ def is_vdisp_process_needed(layer):
 
     #if is_layer_preview_mode_enabled(yp) and vdisp_ch.normal_map_type != 'VECTOR_DISPLACEMENT_MAP': return True
 
+    # CUSTOM: group/previous-layers own a vdisp map; a custom layer is a leaf like NOISE.
     if layer.type in {'GROUP', 'PREV_LAYERS'}: 
         return is_layer_using_vdisp_map(layer, vdisp_root_ch)
     #elif vdisp_ch.normal_map_type == 'VECTOR_DISPLACEMENT_MAP': # or vdisp_ch.enable_transition_bump:
@@ -5744,6 +5548,7 @@ def is_normal_process_needed(layer):
 
     if is_layer_preview_mode_enabled(yp) and height_ch.normal_map_type != 'VECTOR_DISPLACEMENT_MAP': return True
 
+    # CUSTOM: group/previous-layers own a normal map; a custom layer is a leaf like NOISE.
     if layer.type in {'GROUP', 'PREV_LAYERS'}: 
         if is_layer_using_bump_map(layer, height_root_ch) and not height_ch.write_height:
             return True
@@ -5800,6 +5605,8 @@ def get_channel_enabled(ch, layer=None, root_ch=None):
     if layer.type == 'PREV_LAYERS':
         return ch.enable
 
+    # CUSTOM: background and group layers force channel enables differently; CUSTOM is a normal
+    # per-layer source and follows the NOISE rule below.
     elif layer.type in {'BACKGROUND', 'GROUP'}:
         
         if layer.type == 'BACKGROUND':
@@ -5929,6 +5736,7 @@ def is_layer_using_bump_map(layer, root_ch=None):
     try: ch = layer.channels[channel_idx]
     except: return False
     if get_channel_enabled(ch, layer, root_ch):
+        # CUSTOM: only group/previous-layers read their children's channels; CUSTOM is a leaf.
         if layer.type in {'GROUP', 'PREV_LAYERS'}:
             if layer.type == 'GROUP':
                 other_layers = get_list_of_direct_children(layer)
@@ -5951,6 +5759,7 @@ def is_layer_using_vdisp_map(layer, root_ch=None):
     try: ch = layer.channels[channel_idx]
     except: return False
     if get_channel_enabled(ch, layer, root_ch):
+        # CUSTOM: only group/previous-layers read their children's channels; CUSTOM is a leaf.
         if layer.type in {'GROUP', 'PREV_LAYERS'}:
             if layer.type == 'GROUP':
                 other_layers = get_list_of_direct_children(layer)
@@ -5974,6 +5783,7 @@ def is_layer_using_normal_map(layer, root_ch=None):
     try: ch = layer.channels[channel_idx]
     except: return False
     if get_channel_enabled(ch, layer, root_ch):
+        # CUSTOM: only group/previous-layers read their children's channels; CUSTOM is a leaf.
         if layer.type in {'GROUP', 'PREV_LAYERS'}:
             if layer.type == 'GROUP':
                 other_layers = get_list_of_direct_children(layer)
@@ -6017,6 +5827,8 @@ def is_any_layer_using_channel(root_ch, node=None):
     color_ch_idx = get_channel_index(color_ch) if root_ch == alpha_ch else -1
 
     for layer in yp.layers:
+        # CUSTOM: group/background layers do not contribute a visible channel value here; CUSTOM
+        # does, like NOISE (so it is not skipped).
         if layer.type in {'GROUP', 'BACKGROUND'}: continue
         if (get_channel_enabled(layer.channels[ch_idx], layer) or 
             (root_ch == alpha_ch and get_channel_enabled(layer.channels[color_ch_idx], layer))
@@ -6034,12 +5846,6 @@ def get_displacement_method():
     if mat and hasattr(mat.cycles, 'displacement_method'):
         return mat.cycles.displacement_method
 
-    # Displacement method is inside object data for Blender 2.77 and below 
-    if not is_bl_newer_than(2, 78):
-        obj = bpy.context.object
-        if obj and obj.data and hasattr(obj.data, 'cycles'):
-            return obj.data.cycles.displacement_method
-
     return 'BUMP'
 
 def get_layer_type_icon(layer_type):
@@ -6055,7 +5861,7 @@ def get_layer_type_icon(layer_type):
     elif layer_type == 'COLOR':
         return 'COLOR'
     elif layer_type == 'HEMI':
-        if is_bl_newer_than(2, 80): return 'LIGHT'
+        return 'LIGHT'
         return 'LAMP'
 
     return 'TEXTURE'
@@ -6071,9 +5877,7 @@ def save_hemi_props(layer, source):
     if norm: layer.hemi_vector = norm.outputs[0].default_value
 
 def get_scene_objects():
-    if is_bl_newer_than(2, 80):
-        return bpy.context.view_layer.objects
-    else: return bpy.context.scene.objects
+    return bpy.context.view_layer.objects
 
 def is_mesh_flat_shaded(mesh):
     # NOTE: This is just approximate way to know if the mesh is flat shaded or not
@@ -6377,6 +6181,7 @@ def check_need_prev_normal(layer):
 
     # Check if previous normal is needed
     need_prev_normal = False
+    # CUSTOM: only HEMI/EDGE_DETECT/AO have the `hemi_use_prev_normal` switch; CUSTOM is out.
     if layer.type in {'HEMI', 'EDGE_DETECT', 'AO'} and layer.hemi_use_prev_normal and height_root_ch:
         need_prev_normal = True
 
@@ -6408,7 +6213,14 @@ def get_all_baked_channel_images(tree):
 def is_layer_using_vector(layer, exclude_baked=False):
     yp = layer.id_data.yp
 
-    if (not exclude_baked and layer.use_baked) or layer.type not in {'VCOL', 'BACKGROUND', 'COLOR', 'GROUP', 'HEMI', 'OBJECT_INDEX', 'BACKFACE', 'EDGE_DETECT', 'AO', 'PREV_LAYERS'}:
+    # CUSTOM: vector using only with a declared `Vector` input; the baked, mask-texcoord and
+    # channel-override reasons below still apply (FR-7, FR-18).
+    if layer.type == 'CUSTOM':
+        if is_custom_vector_using(layer): return True
+        if not exclude_baked and layer.use_baked: return True
+    # CUSTOM: handled by the branch above (a declared `Vector` input); this set is the built-in
+    # default, which a custom layer never reaches.
+    elif (not exclude_baked and layer.use_baked) or layer.type not in {'VCOL', 'BACKGROUND', 'COLOR', 'GROUP', 'HEMI', 'OBJECT_INDEX', 'BACKFACE', 'EDGE_DETECT', 'AO', 'PREV_LAYERS'}:
         return True
 
     for i, ch in enumerate(layer.channels):
@@ -6540,9 +6352,8 @@ def get_vcol_data_type_and_domain_by_name(obj, vcol_name, objs=[]):
     vcols = get_vertex_colors(obj)
     if vcol_name in vcols:
         vcol = vcols.get(vcol_name)
-        if is_bl_newer_than(3, 2):
-            data_type = vcol.data_type
-            domain = vcol.domain
+        data_type = vcol.data_type
+        domain = vcol.domain
 
     if not vcol:
 
@@ -6556,8 +6367,8 @@ def get_vcol_data_type_and_domain_by_name(obj, vcol_name, objs=[]):
                 if mod.type == 'NODES' and mod.node_group:
                     outputs = get_tree_outputs(mod.node_group)
                     for outp in outputs:
-                        if ((is_bl_newer_than(4) and outp.socket_type == 'NodeSocketColor') or
-                            (not is_bl_newer_than(4) and outp.type == 'RGBA')):
+                        if ((outp.socket_type == 'NodeSocketColor') or
+                            (False)):
                             if is_bl_newer_than(5, 2):
                                 name = getattr(mod.properties.outputs, outp.identifier).attribute_name
                             else: name = mod[outp.identifier + '_attribute_name'] == vcol_name
@@ -6617,8 +6428,6 @@ def is_colorid_vcol_still_being_used(objs):
     return False
 
 def is_image_source_srgb(image, source):
-    if not is_bl_newer_than(2, 80):
-        return source.color_space == 'COLOR'
 
     # HACK: Sometimes just loaded UDIM images has empty colorspace settings name
     if image.source == 'TILED' and image.colorspace_settings.name == '':
@@ -6631,8 +6440,6 @@ def is_image_source_srgb(image, source):
     return image.colorspace_settings.name == get_srgb_name()
 
 def is_image_source_non_color(image, source):
-    if not is_bl_newer_than(2, 80):
-        return source.color_space == 'NONE'
 
     # Generated float images is behaving like srgb for some reason in blender
     return image.colorspace_settings.name == get_noncolor_name() and not (image.is_float and image.source == 'GENERATED')
@@ -6680,6 +6487,8 @@ def get_layer_channel_gamma_value(ch, layer=None, root_ch=None, channel_source=N
             and root_ch.special_type != 'NORMAL' 
             and root_ch.colorspace == 'SRGB' 
             and socket_input_name == 'Color' 
+            # CUSTOM: per-channel gamma behaves exactly like NOISE (deviation table); CUSTOM is in
+            # this "not IMAGE/BACKGROUND/GROUP/PREV" set.
             and layer.type not in {'IMAGE', 'BACKGROUND', 'GROUP', 'PREV_LAYERS'}
         ):
             return GAMMA
@@ -6712,6 +6521,8 @@ def get_layer_channel_gamma_value(ch, layer=None, root_ch=None, channel_source=N
             and not ch.gamma_space 
             and root_ch.special_type not in {'NORMAL', 'HEIGHT', 'VDISP'}
             and root_ch.colorspace == 'SRGB' 
+            # CUSTOM: gamma correction for non-image layer data, exactly the NOISE case; CUSTOM is
+            # in the "not IMAGE/BACKGROUND/GROUP/PREV" set and not HEMI/EDGE_DETECT-only.
             and (socket_input_name == 'Color' or layer.type in {'HEMI', 'EDGE_DETECT'})
             and layer.type not in {'IMAGE', 'BACKGROUND', 'GROUP', 'PREV_LAYERS'}
         ):
@@ -6771,7 +6582,7 @@ def get_layer_gamma_value(layer, source=None, layer_enabled=None):
 
             # Should linearize srgb image and float image
             if not yp.use_linear_blending:
-                if image.is_float and is_bl_newer_than(2, 80):
+                if image.is_float:
 
                     # Float image with srgb will use double gamma calculation
                     if is_image_source_srgb(image, source):
@@ -6848,10 +6659,7 @@ def get_flow_vcol(obj, uv0, uv1):
             lis = [li for li, l in enumerate(obj.data.loops) if uv0.data[li].uv == cll]
             
             for li in lis:
-                if is_bl_newer_than(2, 80):
-                    vcol.data[li].color = (cv.x, cv.y, 0.0, 1.0)
-                else:
-                    vcol.data[li].color = (cv.x, cv.y, 0.0)
+                vcol.data[li].color = (cv.x, cv.y, 0.0, 1.0)
 
     return vcol
 
@@ -6859,22 +6667,19 @@ def new_mix_node(tree, entity, prop, label='', data_type='RGBA'):
     ''' Create new mix node '''
     if not hasattr(entity, prop): return
 
-    node_id_name = 'ShaderNodeMix' if is_bl_newer_than(3, 4) else 'ShaderNodeMixRGB'
+    node_id_name = 'ShaderNodeMix'
 
     node = new_node(tree, entity, prop, node_id_name, label)
 
-    if is_bl_newer_than(3, 4):
-        node.data_type = data_type
+    node.data_type = data_type
 
     return node
 
 def simple_new_mix_node(tree, data_type='RGBA', label=''):
     ''' Create simple new mix node '''
 
-    if is_bl_newer_than(3, 4):
-        node = tree.nodes.new('ShaderNodeMix')
-        node.data_type = data_type
-    else: node = tree.nodes.new('ShaderNodeMixRGB')
+    node = tree.nodes.new('ShaderNodeMix')
+    node.data_type = data_type
 
     if label != '': node.label = label
 
@@ -6904,9 +6709,7 @@ def check_new_mix_node(tree, entity, prop, label='', return_dirty=False, data_ty
 
 def replace_new_mix_node(tree, entity, prop, label='', return_status=False, hard_replace=False, dirty=False, force_replace=False, data_type='RGBA'):
 
-    if is_bl_newer_than(3, 4):
-        node_id_name = 'ShaderNodeMix'
-    else: node_id_name = 'ShaderNodeMixRGB'
+    node_id_name = 'ShaderNodeMix'
 
     group_name = ''
 
@@ -6915,9 +6718,8 @@ def replace_new_mix_node(tree, entity, prop, label='', return_status=False, hard
         return_status=True, hard_replace=hard_replace, dirty=dirty, force_replace=force_replace
     )
 
-    if is_bl_newer_than(3, 4):
-        if node.data_type != data_type:
-            node.data_type = data_type
+    if node.data_type != data_type:
+        node.data_type = data_type
 
     if return_status:
         return node, dirty
@@ -7640,7 +7442,7 @@ def shift_mask_fcurves_up(layer, start_index=1):
                 fc.data_path = fc.data_path.replace('.masks[' + str(i) + ']', '.masks[' + str(i-1) + ']')
 
 def is_tangent_sign_hacks_needed(yp):
-    return yp.enable_tangent_sign_hacks and is_bl_newer_than(2, 80) and not is_bl_newer_than(3)
+    return False
 
 def is_root_ch_prop_node_unique(root_ch, prop):
     yp = root_ch.id_data.yp
@@ -7682,48 +7484,20 @@ def copy_image_channel_pixels(src, dest, src_idx=0, dest_idx=0, segment=None, se
         src_start_x = width * segment_src.tile_x
         src_start_y = height * segment_src.tile_y
 
-    if is_bl_newer_than(2, 83):
+    dest_pxs = numpy.empty(shape=dest.size[0]*dest.size[1]*4, dtype=numpy.float32)
+    src_pxs = numpy.empty(shape=src.size[0]*src.size[1]*4, dtype=numpy.float32)
+    dest.pixels.foreach_get(dest_pxs)
+    src.pixels.foreach_get(src_pxs)
 
-        # Store pixels to numpy
-        dest_pxs = numpy.empty(shape=dest.size[0]*dest.size[1]*4, dtype=numpy.float32)
-        src_pxs = numpy.empty(shape=src.size[0]*src.size[1]*4, dtype=numpy.float32)
-        dest.pixels.foreach_get(dest_pxs)
-        src.pixels.foreach_get(src_pxs)
+    # Set array to 3d
+    dest_pxs.shape = (-1, dest.size[0], 4)
+    src_pxs.shape = (-1, src.size[0], 4)
 
-        # Set array to 3d
-        dest_pxs.shape = (-1, dest.size[0], 4)
-        src_pxs.shape = (-1, src.size[0], 4)
-
-        # Copy to selected channel
-        if invert_value:
-            dest_pxs[start_y:start_y+height, start_x:start_x+width][::, ::, dest_idx] = 1.0 - src_pxs[src_start_y:src_start_y+height, src_start_x:src_start_x+width][::, ::, src_idx]
-        else: dest_pxs[start_y:start_y+height, start_x:start_x+width][::, ::, dest_idx] = src_pxs[src_start_y:src_start_y+height, src_start_x:src_start_x+width][::, ::, src_idx]
-        dest.pixels.foreach_set(dest_pxs.ravel())
-
-    else:
-        # Get image pixels
-        src_pxs = list(src.pixels)
-        dest_pxs = list(dest.pixels)
-
-        # Copy to selected channel
-        if invert_value:
-            for y in range(height):
-                source_offset_y = width * 4 * (y + src_start_y)
-                offset_y = dest.size[0] * 4 * (y + start_y)
-                for x in range(width):
-                    source_offset_x = 4 * (x + src_start_x)
-                    offset_x = 4 * (x + start_x)
-                    dest_pxs[offset_y + offset_x + dest_idx] = 1.0 - src_pxs[source_offset_y + source_offset_x + src_idx]
-        else:
-            for y in range(height):
-                source_offset_y = width * 4 * (y + src_start_y)
-                offset_y = dest.size[0] * 4 * (y + start_y)
-                for x in range(width):
-                    source_offset_x = 4 * (x + src_start_x)
-                    offset_x = 4 * (x + start_x)
-                    dest_pxs[offset_y + offset_x + dest_idx] = src_pxs[source_offset_y + source_offset_x + src_idx]
-
-        dest.pixels = dest_pxs
+    # Copy to selected channel
+    if invert_value:
+        dest_pxs[start_y:start_y+height, start_x:start_x+width][::, ::, dest_idx] = 1.0 - src_pxs[src_start_y:src_start_y+height, src_start_x:src_start_x+width][::, ::, src_idx]
+    else: dest_pxs[start_y:start_y+height, start_x:start_x+width][::, ::, dest_idx] = src_pxs[src_start_y:src_start_y+height, src_start_x:src_start_x+width][::, ::, src_idx]
+    dest.pixels.foreach_set(dest_pxs.ravel())
 
 def copy_image_pixels(src, dest, segment=None, segment_src=None):
 
@@ -7747,34 +7521,18 @@ def copy_image_pixels(src, dest, segment=None, segment_src=None):
         src_start_x = width * segment_src.tile_x
         src_start_y = height * segment_src.tile_y
 
-    if is_bl_newer_than(2, 83):
-        target_pxs = numpy.empty(shape=dest.size[0]*dest.size[1] * 4, dtype=numpy.float32)
-        source_pxs = numpy.empty(shape=src.size[0]*src.size[1] * 4, dtype=numpy.float32)
-        dest.pixels.foreach_get(target_pxs)
-        src.pixels.foreach_get(source_pxs)
+    target_pxs = numpy.empty(shape=dest.size[0]*dest.size[1] * 4, dtype=numpy.float32)
+    source_pxs = numpy.empty(shape=src.size[0]*src.size[1] * 4, dtype=numpy.float32)
+    dest.pixels.foreach_get(target_pxs)
+    src.pixels.foreach_get(source_pxs)
 
-        # Set array to 3d
-        target_pxs.shape = (-1, dest.size[0], 4)
-        source_pxs.shape = (-1, src.size[0], 4)
+    # Set array to 3d
+    target_pxs.shape = (-1, dest.size[0], 4)
+    source_pxs.shape = (-1, src.size[0], 4)
 
-        target_pxs[start_y:start_y+height, start_x:start_x+width] = source_pxs[src_start_y:src_start_y+height, src_start_x:src_start_x+width]
+    target_pxs[start_y:start_y+height, start_x:start_x+width] = source_pxs[src_start_y:src_start_y+height, src_start_x:src_start_x+width]
 
-        dest.pixels.foreach_set(target_pxs.ravel())
-
-    else:
-        target_pxs = list(dest.pixels)
-        source_pxs = list(src.pixels)
-
-        for y in range(height):
-            source_offset_y = src.size[0] * 4 * (y + src_start_y)
-            offset_y = dest.size[0] * 4 * (y + start_y)
-            for x in range(width):
-                source_offset_x = 4 * (x + src_start_x)
-                offset_x = 4 * (x + start_x)
-                for i in range(4):
-                    target_pxs[offset_y + offset_x + i] = source_pxs[source_offset_y + source_offset_x + i]
-
-        dest.pixels = target_pxs
+    dest.pixels.foreach_set(target_pxs.ravel())
 
 def copy_image_pixels_with_conversion(src, dest, segment=None, segment_src=None):
 
@@ -7805,29 +7563,14 @@ def set_image_pixels(image, color, segment=None):
         width = segment.width
         height = segment.height
 
-    if is_bl_newer_than(2, 83):
-        pxs = numpy.empty(shape=image.size[0]*image.size[1]*4, dtype=numpy.float32)
-        image.pixels.foreach_get(pxs)
+    pxs = numpy.empty(shape=image.size[0]*image.size[1]*4, dtype=numpy.float32)
+    image.pixels.foreach_get(pxs)
 
-        # Set array to 3d
-        pxs.shape = (-1, image.size[0], 4)
+    # Set array to 3d
+    pxs.shape = (-1, image.size[0], 4)
 
-        pxs[start_y:start_y+height, start_x:start_x+width] = color
-        image.pixels.foreach_set(pxs.ravel())
-
-    else:
-        pxs = list(image.pixels)
-
-        for y in range(height):
-            source_offset_y = width * 4 * y
-            offset_y = image.size[0] * 4 * (y + start_y)
-            for x in range(width):
-                source_offset_x = 4 * x
-                offset_x = 4 * (x + start_x)
-                for i in range(4):
-                    pxs[offset_y + offset_x + i] = color[i]
-
-        image.pixels = pxs
+    pxs[start_y:start_y+height, start_x:start_x+width] = color
+    image.pixels.foreach_set(pxs.ravel())
 
 def set_image_pixels_to_srgb(image, segment=None):
 
@@ -7844,33 +7587,18 @@ def set_image_pixels_to_srgb(image, segment=None):
         width = segment.width
         height = segment.height
 
-    if is_bl_newer_than(2, 83):
-        pxs = numpy.empty(shape=image.size[0]*image.size[1]*4, dtype=numpy.float32)
-        image.pixels.foreach_get(pxs)
+    pxs = numpy.empty(shape=image.size[0]*image.size[1]*4, dtype=numpy.float32)
+    image.pixels.foreach_get(pxs)
 
-        # Set array to 3d
-        pxs.shape = (-1, image.size[0], 4)
+    # Set array to 3d
+    pxs.shape = (-1, image.size[0], 4)
 
-        # Do srgb conversion
-        vecfunc = numpy.vectorize(linear_to_srgb_per_element)
-        for i in range(3):
-            pxs[start_y:start_y+height, start_x:start_x+width, i] = vecfunc(pxs[start_y:start_y+height, start_x:start_x+width, i])
+    # Do srgb conversion
+    vecfunc = numpy.vectorize(linear_to_srgb_per_element)
+    for i in range(3):
+        pxs[start_y:start_y+height, start_x:start_x+width, i] = vecfunc(pxs[start_y:start_y+height, start_x:start_x+width, i])
 
-        image.pixels.foreach_set(pxs.ravel())
-
-    else:
-        pxs = list(image.pixels)
-
-        for y in range(height):
-            source_offset_y = width * 4 * y
-            offset_y = image.size[0] * 4 * (y + start_y)
-            for x in range(width):
-                source_offset_x = 4 * x
-                offset_x = 4 * (x + start_x)
-                for i in range(3):
-                    pxs[offset_y + offset_x + i] = linear_to_srgb_per_element(pxs[offset_y + offset_x + i])
-
-        image.pixels = pxs
+    image.pixels.foreach_set(pxs.ravel())
 
 def set_image_pixels_to_linear(image, segment=None, power=1):
 
@@ -7887,35 +7615,19 @@ def set_image_pixels_to_linear(image, segment=None, power=1):
         width = segment.width
         height = segment.height
 
-    if is_bl_newer_than(2, 83):
-        pxs = numpy.empty(shape=image.size[0]*image.size[1]*4, dtype=numpy.float32)
-        image.pixels.foreach_get(pxs)
+    pxs = numpy.empty(shape=image.size[0]*image.size[1]*4, dtype=numpy.float32)
+    image.pixels.foreach_get(pxs)
 
-        # Set array to 3d
-        pxs.shape = (-1, image.size[0], 4)
+    # Set array to 3d
+    pxs.shape = (-1, image.size[0], 4)
 
-        # Do linear conversion
-        vecfunc = numpy.vectorize(srgb_to_linear_per_element)
-        for p in range(power):
-            for i in range(3):
-                pxs[start_y:start_y+height, start_x:start_x+width, i] = vecfunc(pxs[start_y:start_y+height, start_x:start_x+width, i])
+    # Do linear conversion
+    vecfunc = numpy.vectorize(srgb_to_linear_per_element)
+    for p in range(power):
+        for i in range(3):
+            pxs[start_y:start_y+height, start_x:start_x+width, i] = vecfunc(pxs[start_y:start_y+height, start_x:start_x+width, i])
 
-        image.pixels.foreach_set(pxs.ravel())
-
-    else:
-        pxs = list(image.pixels)
-
-        for y in range(height):
-            source_offset_y = width * 4 * y
-            offset_y = image.size[0] * 4 * (y + start_y)
-            for x in range(width):
-                source_offset_x = 4 * x
-                offset_x = 4 * (x + start_x)
-                for p in range(power):
-                    for i in range(3):
-                        pxs[offset_y + offset_x + i] = srgb_to_linear_per_element(pxs[offset_y + offset_x + i])
-
-        image.pixels = pxs
+    image.pixels.foreach_set(pxs.ravel())
 
 def multiply_image_rgb_by_alpha(image, segment=None, power=1):
 
@@ -7932,32 +7644,17 @@ def multiply_image_rgb_by_alpha(image, segment=None, power=1):
         width = segment.width
         height = segment.height
 
-    if is_bl_newer_than(2, 83):
-        pxs = numpy.empty(shape=image.size[0]*image.size[1]*4, dtype=numpy.float32)
-        image.pixels.foreach_get(pxs)
+    pxs = numpy.empty(shape=image.size[0]*image.size[1]*4, dtype=numpy.float32)
+    image.pixels.foreach_get(pxs)
 
-        # Set array to 3d
-        pxs.shape = (-1, image.size[0], 4)
+    # Set array to 3d
+    pxs.shape = (-1, image.size[0], 4)
 
-        # Do linear conversion
-        for i in range(3):
-            pxs[start_y:start_y+height, start_x:start_x+width, i] *= pow(pxs[start_y:start_y+height, start_x:start_x+width, 3], power)
+    # Do linear conversion
+    for i in range(3):
+        pxs[start_y:start_y+height, start_x:start_x+width, i] *= pow(pxs[start_y:start_y+height, start_x:start_x+width, 3], power)
 
-        image.pixels.foreach_set(pxs.ravel())
-
-    else:
-        pxs = list(image.pixels)
-
-        for y in range(height):
-            source_offset_y = width * 4 * y
-            offset_y = image.size[0] * 4 * (y + start_y)
-            for x in range(width):
-                source_offset_x = 4 * x
-                offset_x = 4 * (x + start_x)
-                for i in range(3):
-                    pxs[offset_y + offset_x + i] *= pow(pxs[offset_y + offset_x + 3], power)
-
-        image.pixels = pxs
+    image.pixels.foreach_set(pxs.ravel())
 
 def safe_divider(divider):
     return max(divider, 0.00001)
@@ -7977,33 +7674,18 @@ def divide_image_rgb_by_alpha(image, segment=None):
         width = segment.width
         height = segment.height
 
-    if is_bl_newer_than(2, 83):
-        pxs = numpy.empty(shape=image.size[0]*image.size[1]*4, dtype=numpy.float32)
-        image.pixels.foreach_get(pxs)
+    pxs = numpy.empty(shape=image.size[0]*image.size[1]*4, dtype=numpy.float32)
+    image.pixels.foreach_get(pxs)
 
-        # Set array to 3d
-        pxs.shape = (-1, image.size[0], 4)
+    # Set array to 3d
+    pxs.shape = (-1, image.size[0], 4)
 
-        # Do linear conversion
-        for i in range(3):
-            vecfunc = numpy.vectorize(safe_divider)
-            pxs[start_y:start_y+height, start_x:start_x+width, i] /= vecfunc(pxs[start_y:start_y+height, start_x:start_x+width, 3])
+    # Do linear conversion
+    for i in range(3):
+        vecfunc = numpy.vectorize(safe_divider)
+        pxs[start_y:start_y+height, start_x:start_x+width, i] /= vecfunc(pxs[start_y:start_y+height, start_x:start_x+width, 3])
 
-        image.pixels.foreach_set(pxs.ravel())
-
-    else:
-        pxs = list(image.pixels)
-
-        for y in range(height):
-            source_offset_y = width * 4 * y
-            offset_y = image.size[0] * 4 * (y + start_y)
-            for x in range(width):
-                source_offset_x = 4 * x
-                offset_x = 4 * (x + start_x)
-                for i in range(3):
-                    pxs[offset_y + offset_x + i] /= safe_divider(pxs[offset_y + offset_x + 3])
-
-        image.pixels = pxs
+    image.pixels.foreach_set(pxs.ravel())
 
 def is_image_filepath_unique(filepath, check_disk=True):
     abspath = bpy.path.abspath(filepath)
@@ -8058,10 +7740,8 @@ def duplicate_image(image, ondisk_duplicate=True):
         if not image.packed_file:
             override = bpy.context.copy()
             override['edit_image'] = new_image
-            if is_bl_newer_than(4):
-                with bpy.context.temp_override(**override):
-                    bpy.ops.image.save_as(filepath=new_path, relative_path=True)
-            else: bpy.ops.image.save_as(override, filepath=new_path, relative_path=True)
+            with bpy.context.temp_override(**override):
+                bpy.ops.image.save_as(filepath=new_path, relative_path=True)
         else:
             new_image.filepath = new_path
 
@@ -8210,14 +7890,12 @@ def get_mask_color_id_color(mask):
     return Color((val[0], val[1], val[2]))
 
 def split_layout(layout, factor, align=False):
-    if not is_bl_newer_than(2, 80):
-        return layout.split(percentage=factor, align=align)
 
     return layout.split(factor=factor, align=align)
 
 def right_aligned_label(layout, text):
     row = layout.row()
-    if is_bl_newer_than(2, 80): row.alignment = 'RIGHT'
+    row.alignment = 'RIGHT'
     row.label(text=text)
 
 def get_armature_modifier(obj, return_index=False):
@@ -8289,8 +7967,6 @@ def get_uv_hash(obj, uv_name):
     return str(h)
 
 def load_image(path, directory, check_existing=True):
-    if not is_bl_newer_than(2, 77):
-        return bpy_extras.image_utils.load_image(path, directory)
 
     return bpy_extras.image_utils.load_image(path, directory, check_existing=check_existing)
 
@@ -8313,8 +7989,6 @@ def get_active_tool_idname():
 def enable_eevee_ao():
     # Enable Eevee AO to make edge detect entity works
     scene = bpy.context.scene
-    if is_bl_newer_than(2, 80) and not is_bl_newer_than(4, 2) and not scene.eevee.use_gtao: 
-        scene.eevee.use_gtao = True
 
 def is_image_available_to_open(image):
     return not image.yia.is_image_atlas and not image.yua.is_udim_atlas and image.name not in {'Render Result', 'Viewer Node', TEMP_ACTIVE_IMAGE_NAME}
@@ -8323,16 +7997,14 @@ def fix_missing_vcol(obj, name, src=None, entity=None, entities=[]):
 
     ref_vcol = None
 
-    if is_bl_newer_than(3, 2):
-        # Try to get reference vcol
-        mat = get_active_material()
-        objs = get_all_objects_with_same_materials(mat)
+    mat = get_active_material()
+    objs = get_all_objects_with_same_materials(mat)
 
-        for o in objs:
-            ovcols = get_vertex_colors(o)
-            if name in ovcols:
-                ref_vcol = ovcols.get(name)
-                break
+    for o in objs:
+        ovcols = get_vertex_colors(o)
+        if name in ovcols:
+            ref_vcol = ovcols.get(name)
+            break
 
     # Default recovered missing vcol is black
     color = (0.0, 0.0, 0.0, 0.0)
@@ -8539,6 +8211,14 @@ def get_available_source_outputs(source, entity_type):
         valid_socket_names = ['Backfacing']
     elif entity_type == 'AO':
         valid_socket_names = ['Color']
+
+    # CUSTOM: a user group's outputs are narrowed by socket type, not by name (FR-4). Shader and
+    # other non-value sockets are never offered. Imported here because custom_node_common imports
+    # this module.
+    if entity_type == 'CUSTOM':
+        from . import custom_node_common
+        return [outp for outp in source.outputs
+            if outp.enabled and custom_node_common.is_custom_socket_compatible(outp)]
 
     outps = [outp for outp in source.outputs if outp.enabled and (not valid_socket_names or outp.name in valid_socket_names)]
 

@@ -3,8 +3,7 @@ from .common import *
 
 def register_module(*modules: list):
     for module in modules:
-        if is_bl_newer_than(4):
-            langs['zh_HANS'] = langs['zh_CN']
+        langs['zh_HANS'] = langs['zh_CN']
 
         bpy.app.translations.register(module.__name__, langs)
 

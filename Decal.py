@@ -58,20 +58,12 @@ def set_gizmo_style(entity, mode):
     decal_obj = get_decal_object(entity)
     if not decal_obj:
         return
-    if is_bl_newer_than(2, 80):
-        if mode == 'SPHERE':
-            decal_obj.empty_display_type = 'SPHERE'
-        elif mode == 'CYLINDER':
-            decal_obj.empty_display_type = 'CIRCLE'
-        else:
-            decal_obj.empty_display_type = 'SINGLE_ARROW'
-    else: 
-        if mode == 'SPHERE':
-            decal_obj.empty_draw_type = 'SPHERE'
-        elif mode == 'CYLINDER':
-            decal_obj.empty_draw_type = 'CIRCLE'
-        else:
-            decal_obj.empty_draw_type = 'SINGLE_ARROW'        
+    if mode == 'SPHERE':
+        decal_obj.empty_display_type = 'SPHERE'
+    elif mode == 'CYLINDER':
+        decal_obj.empty_display_type = 'CIRCLE'
+    else:
+        decal_obj.empty_display_type = 'SINGLE_ARROW'
 
 def update_decal_projection(self, context):
     yp = self.id_data.yp
@@ -133,9 +125,8 @@ def update_enable_decal_object_constraint(self, context):
         if not decal_const and obj:
             c = decal_obj.constraints.new('SHRINKWRAP')
             c.target = obj
-            if is_bl_newer_than(2, 80):
-                c.use_track_normal = True
-                c.track_axis = 'TRACK_Z'
+            c.use_track_normal = True
+            c.track_axis = 'TRACK_Z'
     else:
         if decal_const:
             decal_obj.constraints.remove(decal_const)
@@ -146,17 +137,12 @@ def create_decal_empty():
     empty_name = get_unique_name('Decal', bpy.data.objects)
     empty = bpy.data.objects.new(empty_name, None)
     
-    if is_bl_newer_than(2, 80):
-        empty.empty_display_type = 'SINGLE_ARROW'
-        empty.location = scene.cursor.location.copy()
-        empty.rotation_euler = scene.cursor.rotation_euler.copy()
-        if len(scene.collection.objects) > 0:
-            custom_collection = obj.users_collection[0]
-        else: 
-            custom_collection = None
+    empty.empty_display_type = 'SINGLE_ARROW'
+    empty.location = scene.cursor.location.copy()
+    empty.rotation_euler = scene.cursor.rotation_euler.copy()
+    if len(scene.collection.objects) > 0:
+        custom_collection = obj.users_collection[0]
     else:
-        empty.empty_draw_type = 'SINGLE_ARROW'
-        empty.location = scene.cursor_location.copy()
         custom_collection = None
 
     link_object(scene, empty, custom_collection)
@@ -192,7 +178,7 @@ def check_entity_decal_nodes(entity, tree=None):
 
     # Create texcoord node if decal is used
     texcoord = tree.nodes.get(entity.texcoord)
-    if entity_enabled and entity.texcoord_type == 'Decal' and is_mapping_possible(entity.type):
+    if entity_enabled and entity.texcoord_type == 'Decal' and is_mapping_possible(entity.type, entity):
 
         # Set image extension type to clip
         image = None
@@ -309,7 +295,7 @@ class YSelectDecalObject(bpy.types.Operator):
             bpy.ops.object.select_all(action='DESELECT')
             if decal_obj.name not in get_scene_objects():
                 parent = decal_obj.parent
-                custom_collection = parent.users_collection[0] if is_bl_newer_than(2, 80) and parent and len(parent.users_collection) > 0 else None
+                custom_collection = parent.users_collection[0] if parent and len(parent.users_collection) > 0 else None
                 link_object(scene, decal_obj, custom_collection)
             set_active_object(decal_obj)
             set_object_select(decal_obj, True)
@@ -343,11 +329,8 @@ class YSetDecalObjectPositionToCursor(bpy.types.Operator):
 
         if texcoord and hasattr(texcoord, 'object') and texcoord.object:
             # Move decal object to 3D cursor
-            if is_bl_newer_than(2, 80):
-                texcoord.object.location = scene.cursor.location.copy()
-                texcoord.object.rotation_euler = scene.cursor.rotation_euler.copy()
-            else: 
-                texcoord.object.location = scene.cursor_location.copy()
+            texcoord.object.location = scene.cursor.location.copy()
+            texcoord.object.rotation_euler = scene.cursor.rotation_euler.copy()
 
         else: return {'CANCELLED'}
 
@@ -465,14 +448,10 @@ def register():
     bpy.types.Object.yp_decal = PointerProperty(type=YPaintDecalObjectProps)
 
     # Handlers
-    if is_bl_newer_than(2, 80):
-        bpy.app.handlers.depsgraph_update_post.append(ypaint_decal_constraint_update)
-    else: bpy.app.handlers.scene_update_pre.append(ypaint_decal_constraint_update_legacy)
+    bpy.app.handlers.depsgraph_update_post.append(ypaint_decal_constraint_update)
 
 def unregister():
     for cls in classes: bpy.utils.unregister_class(cls)
 
     # Handlers
-    if is_bl_newer_than(2, 80):
-        bpy.app.handlers.depsgraph_update_post.remove(ypaint_decal_constraint_update)
-    else: bpy.app.handlers.scene_update_pre.remove(ypaint_decal_constraint_update_legacy)
+    bpy.app.handlers.depsgraph_update_post.remove(ypaint_decal_constraint_update)

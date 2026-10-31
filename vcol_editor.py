@@ -153,16 +153,10 @@ def set_custom_eraser_brush_icon(eraser_brush):
     eraser_icon = 'eraser.png' #if is_bl_newer_than(2, 92) else 'eraser_small.png'
     filepath = get_addon_filepath() + os.sep + 'asset_icons' + os.sep + eraser_icon
 
-    if is_bl_newer_than(2, 92):
-        override = bpy.context.copy()
-        override['id'] = eraser_brush
-        if is_bl_newer_than(4):
-            #with bpy.context.temp_override(id=eraser_brush):
-            with bpy.context.temp_override(**override):
-                bpy.ops.ed.lib_id_load_custom_preview(filepath=filepath)
-        else: bpy.ops.ed.lib_id_load_custom_preview(override, filepath=filepath)
-    else:
-        eraser_brush.icon_filepath = filepath
+    override = bpy.context.copy()
+    override['id'] = eraser_brush
+    with bpy.context.temp_override(**override):
+        bpy.ops.ed.lib_id_load_custom_preview(filepath=filepath)
 
     if not is_bl_newer_than(4, 3):
         eraser_brush.use_custom_icon = True
@@ -258,11 +252,11 @@ class YToggleEraser(bpy.types.Operator):
             brush = context.tool_settings.image_paint.brush
             draw_brush_name = 'Paint Soft' if is_bl_newer_than(4, 3) else 'TexDraw'
             draw_brush = bpy.data.brushes.get(draw_brush_name)
-        elif mode == 'VERTEX_PAINT' and is_bl_newer_than(2, 80): 
+        elif mode == 'VERTEX_PAINT':
             brush = context.tool_settings.vertex_paint.brush
             draw_brush_name = 'Paint Soft' if is_bl_newer_than(4, 3) else 'Draw'
             draw_brush = bpy.data.brushes.get(draw_brush_name)
-        elif mode == 'SCULPT' and is_bl_newer_than(3, 2): 
+        elif mode == 'SCULPT':
             brush = context.tool_settings.sculpt.brush
             draw_brush_name = 'Paint Blend' if is_bl_newer_than(4, 3) else 'Paint'
             draw_brush = bpy.data.brushes.get(draw_brush_name)
@@ -397,10 +391,9 @@ class YSelectFacesByVcol(bpy.types.Operator):
         obj = context.object
         if not obj or obj.type != 'MESH' or not any(get_vertex_colors(obj)): return False
 
-        if is_bl_newer_than(3, 2):
-            vcol = obj.data.color_attributes.active_color
-            if not vcol or vcol.domain != 'CORNER':
-                return False
+        vcol = obj.data.color_attributes.active_color
+        if not vcol or vcol.domain != 'CORNER':
+            return False
 
         return obj.mode == 'EDIT'
 
@@ -411,7 +404,7 @@ class YSelectFacesByVcol(bpy.types.Operator):
         vcol_name = get_active_vertex_color(context.object).name
         target = Vector(linear_to_srgb(Color((self.color[0], self.color[1], self.color[2]))))
 
-        if mat.users > 1 and is_bl_newer_than(2, 80):
+        if mat.users > 1:
             objs = get_all_objects_with_same_materials(mat, mesh_only=True)
         else: objs = [context.object]
 
@@ -466,10 +459,9 @@ class YVcolFillFaceCustom(bpy.types.Operator):
         obj = context.object
         if not obj or obj.type != 'MESH' or not any(get_vertex_colors(obj)): return False
 
-        if is_bl_newer_than(3, 2):
-            vcol = obj.data.color_attributes.active_color
-            if not vcol or vcol.domain != 'CORNER':
-                return False
+        vcol = obj.data.color_attributes.active_color
+        if not vcol or vcol.domain != 'CORNER':
+            return False
 
         return obj.mode == 'EDIT'
 
@@ -479,17 +471,14 @@ class YVcolFillFaceCustom(bpy.types.Operator):
         # Experiment with numpy
         use_numpy = True #is_bl_newer_than(2, 80)
 
-        if is_bl_newer_than(2, 80):
-            objs = context.objects_in_mode
+        objs = context.objects_in_mode
 
-            # Set the same vertex color for all objects first
-            vcol = get_active_vertex_color(context.object)
-            for obj in objs:
-                vcols = get_vertex_colors(obj)
-                vc = vcols.get(vcol.name)
-                set_active_vertex_color(obj, vc)
-
-        else: objs = [context.object]
+        # Set the same vertex color for all objects first
+        vcol = get_active_vertex_color(context.object)
+        for obj in objs:
+            vcols = get_vertex_colors(obj)
+            vc = vcols.get(vcol.name)
+            set_active_vertex_color(obj, vc)
 
         for obj in objs:
 
@@ -514,11 +503,8 @@ class YVcolFillFaceCustom(bpy.types.Operator):
                 continue
 
             color = Color((self.color[0], self.color[1], self.color[2]))
-            if not is_bl_newer_than(3, 2):
-                color = linear_to_srgb(color)
 
-            if is_bl_newer_than(2, 80):
-                color = (color[0], color[1], color[2], self.color[3])
+            color = (color[0], color[1], color[2], self.color[3])
 
             # HACK: Sometimes color assigned are different so read the assigned color and write it back to mask color id
             if len(loop_indices) > 0:
@@ -528,13 +514,10 @@ class YVcolFillFaceCustom(bpy.types.Operator):
                     color = (written_col[0], written_col[1], written_col[2])
                                 
                     set_entity_prop_value(context.mask, 'color_id', Color(color))
-                    if not is_bl_newer_than(3, 2):
-                        set_entity_prop_value(context.mask, 'color_id', srgb_to_linear(get_mask_color_id_color(context.mask)))
-                    if is_bl_newer_than(2, 80):
-                        color = (written_col[0], written_col[1], written_col[2], written_col[3])
+                    color = (written_col[0], written_col[1], written_col[2], written_col[3])
 
                 # Blender 2.80+ has alpha channel on vertex color
-                dimension = 4 if is_bl_newer_than(2, 80) else 3
+                dimension = 4
 
                 if use_numpy:
                     nvcol = numpy.zeros(len(vcol.data) * dimension, dtype=numpy.float32)
@@ -575,10 +558,9 @@ class YVcolFill(bpy.types.Operator):
         obj = context.object
         if not obj or obj.type != 'MESH' or not any(get_vertex_colors(obj)): return False
 
-        if is_bl_newer_than(3, 2):
-            vcol = obj.data.color_attributes.active_color
-            if not vcol or vcol.domain not in {'CORNER', 'POINT'}:
-                return False
+        vcol = obj.data.color_attributes.active_color
+        if not vcol or vcol.domain not in {'CORNER', 'POINT'}:
+            return False
 
         return obj.mode == 'EDIT'
 
@@ -588,9 +570,7 @@ class YVcolFill(bpy.types.Operator):
         # Experiment with numpy
         use_numpy = True #is_bl_newer_than(2, 80)
 
-        if is_bl_newer_than(2, 80):
-            objs = context.objects_in_mode
-        else: objs = [context.object]
+        objs = context.objects_in_mode
 
         if context.tool_settings.mesh_select_mode[0] or context.tool_settings.mesh_select_mode[1]:
             fill_mode = 'VERTEX'
@@ -633,15 +613,12 @@ class YVcolFill(bpy.types.Operator):
             elif self.color_option == 'BLACK':
                 color = (0, 0, 0)
                 alpha = 1.0
-            elif not is_bl_newer_than(3, 2):
-                color = linear_to_srgb(color)
 
             # Blender 2.80+ has alpha channel on vertex color
-            dimension = 4 if is_bl_newer_than(2, 80) else 3
-            if is_bl_newer_than(2, 80):
-                color = (color[0], color[1], color[2], alpha)
+            dimension = 4
+            color = (color[0], color[1], color[2], alpha)
 
-            if is_bl_newer_than(3, 2) and vcol.domain == 'POINT':
+            if vcol.domain == 'POINT':
                 if use_numpy:
                     nvcol = numpy.zeros(len(vcol.data) * dimension, dtype=numpy.float32)
                     vcol.data.foreach_get('color', nvcol)
@@ -713,25 +690,11 @@ def vcol_editor_draw(self, context):
 
         row = col.row()
         rcol = row.column()
-        if is_bl_newer_than(3, 2):
-            rcol.template_list("MESH_UL_color_attributes", "vcols", mesh, 
-                    "color_attributes", vcols, "active_color_index", rows=2)
-            rcol = row.column(align=True)
-            rcol.operator("geometry.color_attribute_add", icon='ADD', text="")
-            rcol.operator("geometry.color_attribute_remove", icon='REMOVE', text="")
-        else:
-            if is_bl_newer_than(2, 80):
-                rcol.template_list("MESH_UL_vcols", "vcols", mesh, 
-                        "vertex_colors", vcols, "active_index", rows=3)
-                rcol = row.column(align=True)
-                rcol.operator("mesh.vertex_color_add", icon='ADD', text="")
-                rcol.operator("mesh.vertex_color_remove", icon='REMOVE', text="")
-            else:
-                rcol.template_list("MESH_UL_uvmaps_vcols", "vcols", mesh, 
-                        "vertex_colors", vcols, "active_index", rows=3)
-                rcol = row.column(align=True)
-                rcol.operator("mesh.vertex_color_add", icon='ZOOMIN', text="")
-                rcol.operator("mesh.vertex_color_remove", icon='ZOOMOUT', text="")
+        rcol.template_list("MESH_UL_color_attributes", "vcols", mesh,
+                "color_attributes", vcols, "active_color_index", rows=2)
+        rcol = row.column(align=True)
+        rcol.operator("geometry.color_attribute_add", icon='ADD', text="")
+        rcol.operator("geometry.color_attribute_remove", icon='REMOVE', text="")
 
     col.separator()
 
@@ -817,8 +780,6 @@ classes = [
     YSetActiveVcol,
     VIEW3D_PT_y_vcol_editor_ui,
 ]
-if not is_bl_newer_than(2, 80):
-    classes.append(VIEW3D_PT_y_vcol_editor_tools)
 
 def register():
     for cls in classes: bpy.utils.register_class(cls)

@@ -133,30 +133,17 @@ def transfer_uv(objs, mat, entity, uv_map, is_entity_baked=False):
     # Copy mapping
     mapp = mat.node_tree.nodes.new('ShaderNodeMapping')
 
-    if is_bl_newer_than(2, 81):
-        mapp.inputs[1].default_value[0] = mapping.inputs[1].default_value[0]
-        mapp.inputs[1].default_value[1] = mapping.inputs[1].default_value[1]
-        mapp.inputs[1].default_value[2] = mapping.inputs[1].default_value[2]
+    mapp.inputs[1].default_value[0] = mapping.inputs[1].default_value[0]
+    mapp.inputs[1].default_value[1] = mapping.inputs[1].default_value[1]
+    mapp.inputs[1].default_value[2] = mapping.inputs[1].default_value[2]
 
-        mapp.inputs[2].default_value[0] = mapping.inputs[2].default_value[0]
-        mapp.inputs[2].default_value[1] = mapping.inputs[2].default_value[1]
-        mapp.inputs[2].default_value[2] = mapping.inputs[2].default_value[2]
+    mapp.inputs[2].default_value[0] = mapping.inputs[2].default_value[0]
+    mapp.inputs[2].default_value[1] = mapping.inputs[2].default_value[1]
+    mapp.inputs[2].default_value[2] = mapping.inputs[2].default_value[2]
 
-        mapp.inputs[3].default_value[0] = mapping.inputs[3].default_value[0]
-        mapp.inputs[3].default_value[1] = mapping.inputs[3].default_value[1]
-        mapp.inputs[3].default_value[2] = mapping.inputs[3].default_value[2]
-    else:
-        mapp.translation[0] = mapping.translation[0]
-        mapp.translation[1] = mapping.translation[1]
-        mapp.translation[2] = mapping.translation[2]
-
-        mapp.rotation[0] = mapping.rotation[0]
-        mapp.rotation[1] = mapping.rotation[1]
-        mapp.rotation[2] = mapping.rotation[2]
-
-        mapp.scale[0] = mapping.scale[0]
-        mapp.scale[1] = mapping.scale[1]
-        mapp.scale[2] = mapping.scale[2]
+    mapp.inputs[3].default_value[0] = mapping.inputs[3].default_value[0]
+    mapp.inputs[3].default_value[1] = mapping.inputs[3].default_value[1]
+    mapp.inputs[3].default_value[2] = mapping.inputs[3].default_value[2]
 
     # Get material output
     output = get_material_output(mat, create_one=True)
@@ -261,13 +248,6 @@ def transfer_uv(objs, mat, entity, uv_map, is_entity_baked=False):
 
         # Remove temp image
         remove_datablock(bpy.data.images, temp_image, user=tex, user_prop='image')
-
-    # HACK: Pack and refresh to update image in Blender 2.77 and lower
-    if not is_bl_newer_than(2, 78) and (image.packed_file or image.filepath == ''):
-        if image.is_float:
-            image_ops.pack_float_image_27x(image)
-        else: image.pack(as_png=True)
-        image.reload()
 
     # Remove temp nodes
     simple_remove_node(mat.node_tree, tex)
@@ -460,12 +440,9 @@ class YTransferSomeLayerUV(bpy.types.Operator, BaseBakeOperator):
         col.prop_search(self, "uv_map", self, "uv_map_coll", text='', icon='GROUP_UVS')
         col.prop(self, 'samples', text='')
 
-        if is_bl_newer_than(3, 1):
-            split = split_layout(col, 0.4, align=True)
-            split.prop(self, 'margin', text='')
-            split.prop(self, 'margin_type', text='')
-        else:
-            col.prop(self, 'margin', text='')
+        split = split_layout(col, 0.4, align=True)
+        split.prop(self, 'margin', text='')
+        split.prop(self, 'margin_type', text='')
 
         col.prop(self, 'remove_from_uv')
 
@@ -608,12 +585,9 @@ class YTransferLayerUV(bpy.types.Operator, BaseBakeOperator):
         col.prop_search(self, "uv_map", self, "uv_map_coll", text='', icon='GROUP_UVS')
         col.prop(self, 'samples', text='')
 
-        if is_bl_newer_than(3, 1):
-            split = split_layout(col, 0.4, align=True)
-            split.prop(self, 'margin', text='')
-            split.prop(self, 'margin_type', text='')
-        else:
-            col.prop(self, 'margin', text='')
+        split = split_layout(col, 0.4, align=True)
+        split.prop(self, 'margin', text='')
+        split.prop(self, 'margin_type', text='')
 
     def execute(self, context):
         if not self.execute_operator_prep(context): return {'CANCELLED'}
@@ -752,7 +726,7 @@ class YResizeImage(bpy.types.Operator, BaseBakeOperator):
         col.label(text='Height:')
 
         if image:
-            if image.yia.is_image_atlas or not is_bl_newer_than(2, 81):
+            if image.yia.is_image_atlas:
                 col.label(text='Samples:')
 
             if image.source == 'TILED':
@@ -766,7 +740,7 @@ class YResizeImage(bpy.types.Operator, BaseBakeOperator):
         col.prop(self, 'height', text='')
 
         if image:
-            if image.yia.is_image_atlas or not is_bl_newer_than(2, 81):
+            if image.yia.is_image_atlas:
                 col.prop(self, 'samples', text='')
 
             if image.source == 'TILED':
@@ -808,7 +782,7 @@ class YResizeImage(bpy.types.Operator, BaseBakeOperator):
         space = None
         ori_space_image = None
 
-        if not image.yia.is_image_atlas and is_bl_newer_than(2, 81):
+        if not image.yia.is_image_atlas:
 
             tilenums = [int(self.tile_number)]
             if image.source == 'TILED' and self.all_tiles:
@@ -956,8 +930,7 @@ class YBakeChannelToVcol(bpy.types.Operator, BaseBakeOperator):
         if self.show_bake_to_alpha_only_option:
             col.label(text='Bake to Alpha:')
 
-        if not is_bl_equal(3, 2):
-            col.label(text='Force First Index:')
+        col.label(text='Force First Index:')
 
         col = row.column(align=True)
 
@@ -970,15 +943,11 @@ class YBakeChannelToVcol(bpy.types.Operator, BaseBakeOperator):
         if self.show_bake_to_alpha_only_option:
             col.prop(self, 'bake_to_alpha_only', text='')
 
-        if not is_bl_equal(3, 2):
-            col.prop(self, 'force_first_index', text='')
+        col.prop(self, 'force_first_index', text='')
 
     def execute(self, context):
         if not self.execute_operator_prep(context): return {'CANCELLED'}
 
-        if not is_bl_newer_than(2, 92):
-            self.report({'ERROR'}, "You need at least Blender 2.92 to use this feature!")
-            return self.execute_operator_cancelled(context)
 
         mat = get_active_material()
         node = get_active_ypaint_node()
@@ -1005,7 +974,7 @@ class YBakeChannelToVcol(bpy.types.Operator, BaseBakeOperator):
                 meshes = []
                 for ob in get_scene_objects():
                     if ob.type != 'MESH': continue
-                    if is_bl_newer_than(2, 80) and ob.hide_viewport: continue
+                    if ob.hide_viewport: continue
                     #if not in_renderable_layer_collection(ob): continue
                     if len(ob.data.polygons) == 0: continue
                     for i, m in enumerate(ob.data.materials):
@@ -1038,7 +1007,7 @@ class YBakeChannelToVcol(bpy.types.Operator, BaseBakeOperator):
                     vcol_name = vcol.name
 
                     # NOTE: Because of api changes, vertex color shift doesn't work with Blender 3.2
-                    if self.force_first_index and not is_bl_equal(3, 2):
+                    if self.force_first_index:
                         move_vcol(ob, get_vcol_index(ob, vcol.name), 0)
 
                     # Get the newly created vcol to avoid pointer error
@@ -1318,13 +1287,10 @@ class BaseBakeBakeTargetOperator():
         #if self.override_bake_device:
         #    ypup.default_bake_device = selected_bake_device
 
-        if is_bl_newer_than(2, 80) and (obj.hide_viewport or obj.hide_render):
+        if (obj.hide_viewport or obj.hide_render):
             self.report({'ERROR'}, "Please unhide render and viewport of the active object!")
             return {'CANCELLED'}
 
-        if not is_bl_newer_than(2, 80) and obj.hide_render:
-            self.report({'ERROR'}, "Please unhide render of the active object!")
-            return {'CANCELLED'}
 
         # Get all objects using material
         objs = [obj]
@@ -1336,7 +1302,7 @@ class BaseBakeBakeTargetOperator():
             meshes = []
             for ob in get_scene_objects():
                 if ob.type != 'MESH': continue
-                if is_bl_newer_than(2, 80) and ob.hide_viewport: continue
+                if ob.hide_viewport: continue
                 if ob.hide_render: continue
                 #if not in_renderable_layer_collection(ob): continue
                 if len(get_uv_layers(ob)) == 0: continue
@@ -1893,8 +1859,7 @@ class YBakeChannels(bpy.types.Operator, BaseBakeOperator):
         ccol.label(text='Samples:')
         ccol.label(text='AA Level:')
 
-        if is_bl_newer_than(3, 1):
-            ccol.separator()
+        ccol.separator()
         ccol.label(text='Margin:')
 
         if height_root_ch:
@@ -1903,8 +1868,7 @@ class YBakeChannels(bpy.types.Operator, BaseBakeOperator):
 
         col.separator()
 
-        if is_bl_newer_than(2, 80):
-            col.label(text='Bake Device:')
+        col.label(text='Bake Device:')
         col.label(text='Interpolation:')
         col.label(text='UV Map:')
 
@@ -1912,12 +1876,12 @@ class YBakeChannels(bpy.types.Operator, BaseBakeOperator):
 
         # NOTE: Because of api changes, vertex color shift doesn't work with Blender 3.2
         active_channel = None
-        if self.only_active_channel and not is_bl_equal(3, 2):
+        if self.only_active_channel:
             active_channel = channels[0]
             if active_channel.enable_bake_to_vcol:
                 ccol.separator()
                 ccol.label(text='')
-        elif self.enable_bake_as_vcol and not is_bl_equal(3, 2):
+        elif self.enable_bake_as_vcol:
             ccol.separator()
             ccol.label(text='Force First Vcol:')
 
@@ -1937,13 +1901,10 @@ class YBakeChannels(bpy.types.Operator, BaseBakeOperator):
         ccol.prop(self, 'samples', text='')
         ccol.prop(self, 'aa_level', text='')
 
-        if is_bl_newer_than(3, 1):
-            ccol.separator()
-            split = split_layout(ccol, 0.4, align=True)
-            split.prop(self, 'margin', text='')
-            split.prop(self, 'margin_type', text='')
-        else:
-            ccol.prop(self, 'margin', text='')
+        ccol.separator()
+        split = split_layout(ccol, 0.4, align=True)
+        split.prop(self, 'margin', text='')
+        split.prop(self, 'margin_type', text='')
 
         if height_root_ch:
             ccol.separator()
@@ -1953,10 +1914,9 @@ class YBakeChannels(bpy.types.Operator, BaseBakeOperator):
 
         col.separator()
 
-        if is_bl_newer_than(2, 80):
-            if self.use_osl:
-                col.label(text='CPU (OSL)')
-            else: col.prop(self, 'bake_device', text='')
+        if self.use_osl:
+            col.label(text='CPU (OSL)')
+        else: col.prop(self, 'bake_device', text='')
         col.prop(self, 'interpolation', text='')
         col.prop_search(self, "uv_map", self, "uv_map_coll", text='', icon='GROUP_UVS')
 
@@ -1966,7 +1926,7 @@ class YBakeChannels(bpy.types.Operator, BaseBakeOperator):
         if active_channel and active_channel.enable_bake_to_vcol:
             ccol.separator()
             ccol.prop(self, 'vcol_force_first_ch_idx_bool', text='Force First Vcol')
-        elif self.enable_bake_as_vcol and not is_bl_equal(3, 2):
+        elif self.enable_bake_as_vcol:
             ccol.separator()
             ccol.prop(self, 'vcol_force_first_ch_idx', text='')
 
@@ -1975,8 +1935,7 @@ class YBakeChannels(bpy.types.Operator, BaseBakeOperator):
         if is_udim_supported():
             ccol.prop(self, 'use_udim')
         ccol.prop(self, 'fxaa', text='Use FXAA')
-        if is_bl_newer_than(2, 81):
-            ccol.prop(self, 'denoise', text='Use Denoise')
+        ccol.prop(self, 'denoise', text='Use Denoise')
 
         any_color_channel = any([c for c in channels if c.type == 'RGB' and c.colorspace == 'SRGB' and c.use_clamp])
         if any_color_channel:
@@ -2017,13 +1976,10 @@ class YBakeChannels(bpy.types.Operator, BaseBakeOperator):
             self.report({'ERROR'}, "No layer is using any channel!")
             return self.execute_operator_cancelled(context)
 
-        if is_bl_newer_than(2, 80) and (obj.hide_viewport or obj.hide_render):
+        if (obj.hide_viewport or obj.hide_render):
             self.report({'ERROR'}, "Please unhide render and viewport of the active object!")
             return self.execute_operator_cancelled(context)
 
-        if not is_bl_newer_than(2, 80) and obj.hide_render:
-            self.report({'ERROR'}, "Please unhide render of the active object!")
-            return self.execute_operator_cancelled(context)
 
         # Get all objects using material
         objs = [obj]
@@ -2034,7 +1990,7 @@ class YBakeChannels(bpy.types.Operator, BaseBakeOperator):
             meshes = []
             for ob in get_scene_objects():
                 if ob.type != 'MESH': continue
-                if is_bl_newer_than(2, 80) and ob.hide_viewport: continue
+                if ob.hide_viewport: continue
                 if ob.hide_render: continue
                 #if not in_renderable_layer_collection(ob): continue
                 if len(get_uv_layers(ob)) == 0: continue
@@ -2061,24 +2017,6 @@ class YBakeChannels(bpy.types.Operator, BaseBakeOperator):
         height_ch = get_root_height_channel(yp)
 
         tangent_sign_calculation = False
-        if BL28_HACK and height_ch and is_bl_newer_than(2, 80) and not is_bl_newer_than(3) and obj in objs:
-
-            if len(yp.uvs) > MAX_VERTEX_DATA - len(get_vertex_colors(obj)):
-                self.report({'WARNING'}, "Maximum vertex colors reached! Need at least " + str(len(yp.uvs)) + " vertex color(s) to bake proper normal!")
-            else:
-                print('INFO: Calculating tangent sign before bake...')
-                tangent_sign_calculation = True
-
-            if tangent_sign_calculation:
-                # Update tangent sign vertex color
-                for uv in yp.uvs:
-                    tangent_process = tree.nodes.get(uv.tangent_process)
-                    if tangent_process:
-                        tangent_process.inputs['Backface Always Up'].default_value = 1.0 if yp.enable_backface_always_up else 0.0
-                        #tangent_process.inputs['Blender 2.8 Cycles Hack'].default_value = 1.0
-                        tansign = tangent_process.node_tree.nodes.get('_tangent_sign')
-                        vcol = refresh_tangent_sign_vcol(obj, uv.name)
-                        if vcol: tansign.attribute_name = vcol.name
 
         # Disable use baked first
         if yp.use_baked:
@@ -2224,7 +2162,7 @@ class YBakeChannels(bpy.types.Operator, BaseBakeOperator):
                     dither_image(baked.image, dither_intensity=self.dither_intensity, alpha_aware=alpha_enabled)
 
                 # Denoise
-                if self.denoise and is_bl_newer_than(2, 81) and ch.type != 'NORMAL':
+                if self.denoise and ch.type != 'NORMAL':
                     denoise_image(baked.image)
 
                 # AA process
@@ -2264,7 +2202,7 @@ class YBakeChannels(bpy.types.Operator, BaseBakeOperator):
                 if baked_disp and baked_disp.image:
 
                     # Denoise
-                    if self.denoise and is_bl_newer_than(2, 81):
+                    if self.denoise:
                         denoise_image(baked_disp.image)
 
                     # AA process
@@ -2499,95 +2437,94 @@ class YBakeChannels(bpy.types.Operator, BaseBakeOperator):
                             uvl.data[li].uv = ori_loop_locs[ob.name][i][j]
 
         # Bake vcol
-        if is_bl_newer_than(2, 92):
-            is_do_nothing = True
-            is_sort_by_channel = False
-            if self.only_active_channel:
-                active_channel = channels[0]
-                if active_channel.enable_bake_to_vcol and self.vcol_force_first_ch_idx_bool:
-                    real_force_first_ch_idx = yp.active_channel_index
-                    is_do_nothing = False
+        is_do_nothing = True
+        is_sort_by_channel = False
+        if self.only_active_channel:
+            active_channel = channels[0]
+            if active_channel.enable_bake_to_vcol and self.vcol_force_first_ch_idx_bool:
+                real_force_first_ch_idx = yp.active_channel_index
+                is_do_nothing = False
+        else:
+            is_do_nothing = self.vcol_force_first_ch_idx == 'Do Nothing'
+            is_sort_by_channel = self.vcol_force_first_ch_idx == 'Sort By Channel Order'
+            # check index, prevent crash
+            if not (is_do_nothing or is_sort_by_channel) and self.vcol_force_first_ch_idx != '':
+                real_force_first_ch_idx = int(self.vcol_force_first_ch_idx) - 2
+                if real_force_first_ch_idx < len(channels) and real_force_first_ch_idx >= 0:
+                    target_ch = channels[real_force_first_ch_idx]
+                    if not (target_ch and target_ch.enable_bake_to_vcol):
+                        real_force_first_ch_idx = -1
+                else: real_force_first_ch_idx = -1
             else:
-                is_do_nothing = self.vcol_force_first_ch_idx == 'Do Nothing'
-                is_sort_by_channel = self.vcol_force_first_ch_idx == 'Sort By Channel Order'
-                # check index, prevent crash
-                if not (is_do_nothing or is_sort_by_channel) and self.vcol_force_first_ch_idx != '':
-                    real_force_first_ch_idx = int(self.vcol_force_first_ch_idx) - 2
-                    if real_force_first_ch_idx < len(channels) and real_force_first_ch_idx >= 0:
-                        target_ch = channels[real_force_first_ch_idx]
-                        if not (target_ch and target_ch.enable_bake_to_vcol):
-                            real_force_first_ch_idx = -1
-                    else: real_force_first_ch_idx = -1
-                else:
-                    real_force_first_ch_idx = -1
-            # used to sort by channel
-            current_vcol_order = 0
-            prepare_bake_settings(
-                book, objs, yp, disable_problematic_modifiers=True,
-                bake_device=self.bake_device, bake_target='VERTEX_COLORS'
-            )
-            for ch in channels:
-                if ch.enable_bake_to_vcol and ch.type != 'NORMAL':
+                real_force_first_ch_idx = -1
+        # used to sort by channel
+        current_vcol_order = 0
+        prepare_bake_settings(
+            book, objs, yp, disable_problematic_modifiers=True,
+            bake_device=self.bake_device, bake_target='VERTEX_COLORS'
+        )
+        for ch in channels:
+            if ch.enable_bake_to_vcol and ch.type != 'NORMAL':
 
-                    # Get vcol name
-                    vcol_name = 'Baked ' + ch.name if ch.bake_to_vcol_name == '' else ch.bake_to_vcol_name
+                # Get vcol name
+                vcol_name = 'Baked ' + ch.name if ch.bake_to_vcol_name == '' else ch.bake_to_vcol_name
 
-                    # Check vertex color
-                    for ob in objs:
-                        vcols = get_vertex_colors(ob)
-                        vcol = vcols.get(vcol_name)
+                # Check vertex color
+                for ob in objs:
+                    vcols = get_vertex_colors(ob)
+                    vcol = vcols.get(vcol_name)
 
-                        # Set index to first so new vcol will copy their value
-                        if len(vcols) > 0:
-                            first_vcol = vcols[0]
-                            set_active_vertex_color(ob, first_vcol)
+                    # Set index to first so new vcol will copy their value
+                    if len(vcols) > 0:
+                        first_vcol = vcols[0]
+                        set_active_vertex_color(ob, first_vcol)
 
-                        if not vcol:
-                            try: 
-                                vcol = new_vertex_color(ob, vcol_name)
-                            except Exception as e: print(e)
+                    if not vcol:
+                        try:
+                            vcol = new_vertex_color(ob, vcol_name)
+                        except Exception as e: print(e)
 
-                        # Get newly created vcol name
-                        vcol_name = vcol.name
+                    # Get newly created vcol name
+                    vcol_name = vcol.name
 
-                        # NOTE: Because of api changes, vertex color shift doesn't work with Blender 3.2
-                        if not is_bl_equal(3, 2) and not is_do_nothing:
-                            if is_sort_by_channel or (real_force_first_ch_idx >= 0 and yp.channels[real_force_first_ch_idx] == ch):
-                                move_vcol(ob, get_vcol_index(ob, vcol.name), current_vcol_order)
+                    # NOTE: Because of api changes, vertex color shift doesn't work with Blender 3.2
+                    if not is_do_nothing:
+                        if is_sort_by_channel or (real_force_first_ch_idx >= 0 and yp.channels[real_force_first_ch_idx] == ch):
+                            move_vcol(ob, get_vcol_index(ob, vcol.name), current_vcol_order)
 
-                        # Get the newly created vcol to avoid pointer error
-                        vcol = vcols.get(vcol_name)
-                        set_active_vertex_color(ob, vcol)
-                    bake_to_vcol(mat, node, ch, objs, None, 1, ch.bake_to_vcol_alpha or ch.enable_alpha or ch == color_ch, vcol_name)
-                    baked = tree.nodes.get(ch.baked_vcol)
-                    if not baked or not is_root_ch_prop_node_unique(ch, 'baked_vcol'):
-                        baked = new_node(tree, ch, 'baked_vcol', get_vcol_bl_idname(), 'Baked Vcol ' + ch.name)
-                        # Set channel to use baked vertex color only when baked_vcol is just created
-                        ch.use_baked_vcol = True
+                    # Get the newly created vcol to avoid pointer error
+                    vcol = vcols.get(vcol_name)
+                    set_active_vertex_color(ob, vcol)
+                bake_to_vcol(mat, node, ch, objs, None, 1, ch.bake_to_vcol_alpha or ch.enable_alpha or ch == color_ch, vcol_name)
+                baked = tree.nodes.get(ch.baked_vcol)
+                if not baked or not is_root_ch_prop_node_unique(ch, 'baked_vcol'):
+                    baked = new_node(tree, ch, 'baked_vcol', get_vcol_bl_idname(), 'Baked Vcol ' + ch.name)
+                    # Set channel to use baked vertex color only when baked_vcol is just created
+                    ch.use_baked_vcol = True
 
-                    set_source_vcol_name(baked, vcol_name)
-                    for ob in objs:
-                        # Recover material index
-                        if ori_mat_ids[ob.name]:
-                            for i, p in enumerate(ob.data.polygons):
-                                if ori_mat_ids[ob.name][i] != p.material_index:
-                                    p.material_index = ori_mat_ids[ob.name][i]
-                    if is_sort_by_channel:
-                        current_vcol_order += 1
+                set_source_vcol_name(baked, vcol_name)
+                for ob in objs:
+                    # Recover material index
+                    if ori_mat_ids[ob.name]:
+                        for i, p in enumerate(ob.data.polygons):
+                            if ori_mat_ids[ob.name][i] != p.material_index:
+                                p.material_index = ori_mat_ids[ob.name][i]
+                if is_sort_by_channel:
+                    current_vcol_order += 1
 
-                    # Set back vcol name to channel baked vcol name
-                    if ch.bake_to_vcol_name != vcol_name:
-                        ch.bake_to_vcol_name = vcol_name
+                # Set back vcol name to channel baked vcol name
+                if ch.bake_to_vcol_name != vcol_name:
+                    ch.bake_to_vcol_name = vcol_name
 
-                else:
-                    # If has baked vcol node, remove it
-                    baked = tree.nodes.get(ch.baked_vcol)
-                    if baked:
-                        simple_remove_node(tree, baked)
+            else:
+                # If has baked vcol node, remove it
+                baked = tree.nodes.get(ch.baked_vcol)
+                if baked:
+                    simple_remove_node(tree, baked)
 
-            # Sort vcols by channel order
-            # Recover bake settings
-            recover_bake_settings(book, yp)
+        # Sort vcols by channel order
+        # Recover bake settings
+        recover_bake_settings(book, yp)
         # Use bake results
         yp.halt_update = True
         yp.use_baked = True
@@ -2604,10 +2541,6 @@ class YBakeChannels(bpy.types.Operator, BaseBakeOperator):
         check_start_end_root_ch_nodes(tree)
 
         # Recover hack
-        if BL28_HACK and height_ch and tangent_sign_calculation and is_bl_newer_than(2, 80) and not is_bl_newer_than(3):
-            print('INFO: Recovering tangent sign after bake...')
-            # Refresh tangent sign hacks
-            update_enable_tangent_sign_hacks(yp, context)
 
         # Rearrange
         reconnect_yp_nodes(tree)
@@ -2883,9 +2816,6 @@ class YMergeLayer(bpy.types.Operator, BaseBakeOperator):
         # Check if there's any unsaved images
         self.any_dirty_images = any_dirty_images_inside_layer(neighbor_layer) or any_dirty_images_inside_layer(layer)
 
-        # Blender 2.7x has no global undo between modes
-        self.legacy_on_non_object_mode = not is_bl_newer_than(2, 80) and context.object.mode != 'OBJECT'
-
         return context.window_manager.invoke_props_dialog(self, width=320)
 
     def check(self, context):
@@ -2923,11 +2853,7 @@ class YMergeLayer(bpy.types.Operator, BaseBakeOperator):
             row.label(text='')
             row.prop(self, 'force_mix_blending', text='Force Mix Blending')
 
-        if self.legacy_on_non_object_mode:
-            col = layout.column(align=True)
-            col.label(text='You cannot UNDO this operation in this mode.', icon='ERROR')
-            col.label(text="Are you sure you want to continue?", icon='BLANK1')
-        elif self.any_dirty_images:
+        if self.any_dirty_images:
             col = layout.column(align=True)
             col.label(text="Unsaved data will be LOST if you UNDO this operation.", icon='ERROR')
             col.label(text="Are you sure you want to continue?", icon='BLANK1')
@@ -3234,9 +3160,6 @@ class YMergeMask(bpy.types.Operator, BaseBakeOperator):
             try: neighbor_mask = layer.masks[index + 1]
             except: neighbor_mask = None
 
-        # Blender 2.7x has no global undo between modes
-        self.legacy_on_non_object_mode = not is_bl_newer_than(2, 80) and context.object.mode != 'OBJECT'
-
         # Check for any dirty images
         self.any_dirty_images = False
         if neighbor_mask:
@@ -3247,19 +3170,15 @@ class YMergeMask(bpy.types.Operator, BaseBakeOperator):
             if (image and image.is_dirty) or (neighbor_image and neighbor_image.is_dirty):
                 self.any_dirty_images = True
 
-        if self.any_dirty_images or self.legacy_on_non_object_mode:
+        if self.any_dirty_images:
             return context.window_manager.invoke_props_dialog(self, width=300)
 
         return self.execute(context)
 
     def draw(self, context):
         col = self.layout.column(align=True)
-        if self.legacy_on_non_object_mode:
-            col.label(text='You cannot UNDO this operation in this mode.', icon='ERROR')
-            col.label(text="Are you sure you want to continue?", icon='BLANK1')
-        else:
-            col.label(text="Unsaved data will be LOST if you UNDO this operation.", icon='ERROR')
-            col.label(text="Are you sure you want to continue?", icon='BLANK1')
+        col.label(text="Unsaved data will be LOST if you UNDO this operation.", icon='ERROR')
+        col.label(text="Are you sure you want to continue?", icon='BLANK1')
 
     def check(self, context):
         return True
@@ -3393,13 +3312,6 @@ class YMergeMask(bpy.types.Operator, BaseBakeOperator):
 
         # Copy results to original image
         copy_image_pixels(img, source.image, segment)
-
-        # HACK: Pack and refresh to update image in Blender 2.77 and lower
-        if not is_bl_newer_than(2, 78) and (source.image.packed_file or source.image.filepath == ''):
-            if source.image.is_float:
-                image_ops.pack_float_image_27x(source.image)
-            else: source.image.pack(as_png=True)
-            source.image.reload()
 
         # Remove temp image
         remove_datablock(bpy.data.images, img, user=tex, user_prop='image')
@@ -3552,8 +3464,6 @@ def update_enable_baked_outside(self, context):
                 baked_node = tree.nodes.get(bt.baked_node)
                 if baked_node: baked_node_outside.interpolation = baked_node.interpolation
 
-                if not is_bl_newer_than(2, 80):
-                    baked_node_outside.color_space = baked_node.color_space
 
                 if baked_node_outside.type == 'ATTRIBUTE':
                     baked_node_outside.attribute_name = baked_node.attribute_name
@@ -3659,7 +3569,7 @@ def update_enable_baked_outside(self, context):
             if loc_x > max_x: max_x = loc_x
 
         # Create GLTF material output node so AO can be included in Blender's automated ORM texture
-        gltf_node_name = lib.GLTF_MATERIAL_OUTPUT if is_bl_newer_than(3, 4) else lib.GLTF_SETTINGS
+        gltf_node_name = lib.GLTF_MATERIAL_OUTPUT
         gltf_node = mtree.nodes.get(gltf_node_name)
         for ch in yp.channels:
             if ch.name in {'Ambient Occlusion', 'Occlusion', 'AO', 'Specular', 'Specular Color', 'Thickness'} and not gltf_node:

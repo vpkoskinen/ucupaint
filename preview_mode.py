@@ -2,7 +2,7 @@ import bpy
 from .common import *
 from .input_outputs import *
 from bpy.props import *
-from . import lib, ListItem, BakeTarget
+from . import lib, BakeTarget
 
 def get_preview(mat, output=None, advanced=False, normal_viewer=False, normal_space='CAMERA', use_alpha=False):
     tree = mat.node_tree
@@ -131,12 +131,8 @@ def set_srgb_view_transform():
             scene.use_nodes = False
 
         scene.yp.ori_view_transform = scene.view_settings.view_transform
-        if is_bl_newer_than(2, 80):
-            try: scene.view_settings.view_transform = 'Standard'
-            except Exception as e: print(e)
-        else: 
-            try: scene.view_settings.view_transform = 'Default'
-            except Exception as e: print(e)
+        try: scene.view_settings.view_transform = 'Standard'
+        except Exception as e: print(e)
 
         scene.yp.ori_display_device = scene.display_settings.display_device
         try: scene.display_settings.display_device = 'sRGB'
@@ -169,7 +165,10 @@ def update_preview_mode(self, context):
     index = yp.preview_mode_channel_index
     try: channel = yp.channels[index]
     except: channel = None
-    layer = ListItem.get_active_layer(yp)
+    # Resolve the previewed layer from the same source of truth as `reconnect_yp_nodes`
+    # (`yp.layers[yp.active_layer_index]`), not the list-item index: the IO rebuild and the link
+    # wiring must never disagree about which layer the preview follows (P1a).
+    layer = get_active_layer(yp)
 
     # Layer Preview Mode
     if channel and is_layer_preview_mode_enabled(yp):

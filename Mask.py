@@ -243,7 +243,7 @@ def replace_mask_type(mask, new_type, item_name='', remove_data=False, modifier_
 
     # Set up mapping
     mapping = tree.nodes.get(mask.mapping)
-    if is_mapping_possible(new_type):
+    if is_mapping_possible(new_type, mask):
         if not mapping:
             mapping = new_node(tree, mask, 'mapping', 'ShaderNodeMapping', 'Mask Mapping')
     else:
@@ -303,7 +303,7 @@ def replace_mask_type(mask, new_type, item_name='', remove_data=False, modifier_
     #Modifier.check_modifiers_trees(mask)
 
     # Set default UV name when necessary
-    if is_mapping_possible(mask.type) and mask.uv_name == '':
+    if is_mapping_possible(mask.type, mask) and mask.uv_name == '':
         obj = bpy.context.object
         if obj and obj.type == 'MESH' and len(obj.data.uv_layers) > 0:
             yp.halt_update = True
@@ -397,7 +397,7 @@ class YNewLayerMask(bpy.types.Operator):
         name = 'Blend',
         description = 'Blend type',
         items = mask_blend_type_items,
-        default = 3 if is_bl_newer_than(2, 90) else None,
+        default = 3,
     )
 
     color_option : EnumProperty(
@@ -566,7 +566,7 @@ class YNewLayerMask(bpy.types.Operator):
             self.hemi_use_prev_normal = False
 
         # Make sure decal is off when adding non mappable mask
-        if not is_mapping_possible(self.type) and self.texcoord_type == 'Decal':
+        if not is_mapping_possible(self.type, self) and self.texcoord_type == 'Decal':
             self.texcoord_type = 'UV'
 
         if not is_object_work_with_uv(obj):
@@ -647,16 +647,15 @@ class YNewLayerMask(bpy.types.Operator):
                 row.prop(self, 'vcol_fill', text='Fill Selected Faces')
 
         if self.type == 'VCOL':
-            if is_bl_newer_than(3, 2):
-                row = split_layout(layout, split_val)
-                right_aligned_label(row, 'Domain:')
-                crow = row.row(align=True)
-                crow.prop(self, 'vcol_domain', expand=True)
+            row = split_layout(layout, split_val)
+            right_aligned_label(row, 'Domain:')
+            crow = row.row(align=True)
+            crow.prop(self, 'vcol_domain', expand=True)
 
-                row = split_layout(layout, split_val)
-                right_aligned_label(row, 'Data Type:')
-                crow = row.row(align=True)
-                crow.prop(self, 'vcol_data_type', expand=True)
+            row = split_layout(layout, split_val)
+            right_aligned_label(row, 'Data Type:')
+            crow = row.row(align=True)
+            crow.prop(self, 'vcol_data_type', expand=True)
                 
             if obj.mode == 'EDIT' and self.color_option == 'BLACK':
                 row = split_layout(layout, split_val)
@@ -750,9 +749,6 @@ class YNewLayerMask(bpy.types.Operator):
             self.report({'ERROR'}, get_vertex_color_label(10)+" mask only works with mesh object!")
             return {'CANCELLED'}
 
-        if not is_bl_newer_than(3, 3) and self.type == 'VCOL' and len(get_vertex_color_names(obj)) >= 8:
-            self.report({'ERROR'}, "Mesh can only use 8 "+get_vertex_color_label(00)+"s!")
-            return {'CANCELLED'}
 
         # Clearing unused image atlas segments
         img_atlas = self.get_to_be_cleared_image_atlas(context, yp)
@@ -843,7 +839,6 @@ class YNewLayerMask(bpy.types.Operator):
 
                 for o in objs:
                     if self.name not in get_vertex_colors(o):
-                        if not is_bl_newer_than(3, 3) and len(get_vertex_colors(o)) >= 8: continue
 
                         color = ()
                         if self.color_option == 'WHITE':
@@ -930,7 +925,7 @@ class YOpenImageAsMask(bpy.types.Operator, ImportHelper, BaseOperator.OpenImage)
         name = 'Blend',
         description = 'Blend type',
         items = mask_blend_type_items,
-        default = 3 if is_bl_newer_than(2, 90) else None,
+        default = 3,
     )
 
     socket_input_name : EnumProperty(
@@ -1178,7 +1173,7 @@ class YOpenExistingDataAsMask(bpy.types.Operator):
         name = 'Blend',
         description = 'Blend type',
         items = mask_blend_type_items,
-        default = 3 if is_bl_newer_than(2, 90) else None,
+        default = 3,
     )
 
     @classmethod
@@ -1316,11 +1311,11 @@ class YOpenExistingDataAsMask(bpy.types.Operator):
             right_aligned_label(row, 'Blend:')
             row.prop(self, 'blend_type', text='')
 
-        if (self.type == 'VCOL' and is_bl_newer_than(2, 92)) or self.type == 'IMAGE':
+        if (self.type == 'VCOL') or self.type == 'IMAGE':
             row = split_layout(layout, split_val)
             if self.type == 'IMAGE':
                 right_aligned_label(row, 'Image Channel:')
-            elif self.type == 'VCOL' and is_bl_newer_than(2, 92):
+            elif self.type == 'VCOL':
                 right_aligned_label(row, get_vertex_color_label()+' Data:')
 
             crow = row.row(align=True)
@@ -1364,7 +1359,6 @@ class YOpenExistingDataAsMask(bpy.types.Operator):
 
             for o in objs:
                 if self.vcol_name not in get_vertex_colors(o):
-                    if not is_bl_newer_than(3, 3) and len(get_vertex_colors(o)) >= 8: continue
                     data_type, domain = get_vcol_data_type_and_domain_by_name(o, self.vcol_name, objs)
                     other_v = new_vertex_color(o, self.vcol_name, data_type, domain, color_fill=(1.0, 1.0, 1.0, 1.0))
                     set_active_vertex_color(o, other_v)
@@ -1486,9 +1480,6 @@ class YRemoveLayerMask(bpy.types.Operator):
         layer = self.layer = context.layer
         mask = self.mask = context.mask
 
-        # Blender 2.7x has no global undo between modes
-        self.legacy_on_non_object_mode = not is_bl_newer_than(2, 80) and context.object.mode != 'OBJECT'
-
         # Check for any dirty images
         self.any_dirty_images = False
         source = get_mask_source(mask)
@@ -1498,19 +1489,15 @@ class YRemoveLayerMask(bpy.types.Operator):
         if (image and image.is_dirty) or (baked_source and baked_source.image and baked_source.image.is_dirty):
             self.any_dirty_images = True
 
-        if self.any_dirty_images or self.legacy_on_non_object_mode:
+        if self.any_dirty_images:
             return context.window_manager.invoke_props_dialog(self, width=300)
 
         return self.execute(context)
 
     def draw(self, context):
         col = self.layout.column(align=True)
-        if self.legacy_on_non_object_mode:
-            col.label(text='You cannot UNDO this operation in this mode.', icon='ERROR')
-            col.label(text="Are you sure you want to continue?", icon='BLANK1')
-        else:
-            col.label(text="Unsaved data will be LOST if you UNDO this operation.", icon='ERROR')
-            col.label(text="Are you sure you want to continue?", icon='BLANK1')
+        col.label(text="Unsaved data will be LOST if you UNDO this operation.", icon='ERROR')
+        col.label(text="Are you sure you want to continue?", icon='BLANK1')
 
     def execute(self, context):
         mask = self.mask
@@ -2283,7 +2270,7 @@ class YLayerMask(bpy.types.PropertyGroup, Decal.BaseDecal):
     blend_type : EnumProperty(
         name = 'Blend',
         items = mask_blend_type_items,
-        default = 3 if is_bl_newer_than(2, 90) else None,
+        default = 3,
         update = update_mask_blend_type
     )
 

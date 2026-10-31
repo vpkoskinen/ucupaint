@@ -3,16 +3,14 @@ from .common import *
 from bpy.props import *
 
 class YBakeInfoOtherObject(bpy.types.PropertyGroup):
-    if is_bl_newer_than(2, 79):
-        object : PointerProperty(type=bpy.types.Object)
+    object : PointerProperty(type=bpy.types.Object)
     object_name : StringProperty(default='')
 
 class YBakeInfoSelectedVertex(bpy.types.PropertyGroup):
     index : IntProperty(default=0)
 
 class YBakeInfoSelectedObject(bpy.types.PropertyGroup):
-    if is_bl_newer_than(2, 79):
-        object : PointerProperty(type=bpy.types.Object)
+    object : PointerProperty(type=bpy.types.Object)
     object_name : StringProperty(default='')
 
     selected_vertex_indices : CollectionProperty(type=YBakeInfoSelectedVertex)

@@ -1,3 +1,10 @@
 *__pycache__
-ucupaint_updater/ucupaint_updater_status.json
+
+# Local agent/session state
+.opencode/
+
+# Add-on state written next to the package when it is loaded from a checkout
+# (named after the package directory: customnodes_updater/, ucupaint_updater/, …)
+*_updater/
+
 credits/*

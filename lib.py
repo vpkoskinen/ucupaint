@@ -94,7 +94,6 @@ OBJECT_INDEX_EQUAL = '~yPL Object Index Equal'
 OBJECT_INDEX_GREATER_THAN = '~yPL Object Index Greater Than'
 OBJECT_INDEX_LESS_THAN = '~yPL Object Index Less Than'
 
-COLOR_ID_EQUAL = '~yPL Color ID Equal'
 COLOR_ID_EQUAL_282 = '~yPL Color ID Equal 2.82'
 
 HEMI = '~yPL Hemi'
@@ -258,20 +257,6 @@ icon_synonyms = {
     'vector_channel' : 'NODE_SOCKET_VECTOR',
 }
 
-icon_synonyms_27x = {
-    #'mask' : 'MOD_MASK', # NOTE: The built in mask icon in Blender 2.7x has too many gradients
-    'bake' : 'RENDER_STILL',
-    'image' : 'IMAGE_DATA',
-    'background' : 'IMAGE_RGB',
-    'vertex_color' : 'GROUP_VCOL',
-    'blend' : 'IMAGE_ZDEPTH',
-    'close' : 'CANCEL',
-    'group' : 'FILE_FOLDER',
-    'hemi' : 'LAMP',
-    'input' : 'INFO',
-    'object_index' : 'OBJECT_DATA',
-    'rename' : 'GREASEPENCIL',
-}
 
 def get_icon(icon_name='', default_icon='QUESTION'):
 
@@ -292,12 +277,8 @@ def get_icon(icon_name='', default_icon='QUESTION'):
 
         # Check icon synonyms
         syname = ''
-        if not is_bl_newer_than(2, 80):
-            if icon_name in icon_synonyms_27x:
-                syname = icon_synonyms_27x[icon_name]
-        else:
-            if icon_name in icon_synonyms:
-                syname = icon_synonyms[icon_name]
+        if icon_name in icon_synonyms:
+            syname = icon_synonyms[icon_name]
 
         if syname in icons:
             icon_value = icons[syname].value
@@ -320,17 +301,14 @@ def get_icon(icon_name='', default_icon='QUESTION'):
     return icon_value
 
 def get_icon_folder():
-    if not is_bl_newer_than(2, 80):
-        icon_set = 'legacy'
-    else:
-        icons = get_user_preferences().icons 
+    icons = get_user_preferences().icons
 
-        if icons == 'DEFAULT':
-            bg_color = bpy.context.preferences.themes[0].preferences.space.back
-            is_dark_theme = bg_color[0] + bg_color[1] + bg_color[2] < 1.5
-            icon_set = 'light' if is_dark_theme else 'dark'
-        else:
-            icon_set = 'legacy'
+    if icons == 'DEFAULT':
+        bg_color = bpy.context.preferences.themes[0].preferences.space.back
+        is_dark_theme = bg_color[0] + bg_color[1] + bg_color[2] < 1.5
+        icon_set = 'light' if is_dark_theme else 'dark'
+    else:
+        icon_set = 'legacy'
 
     return get_addon_filepath() + 'icons' + os.sep + icon_set.lower() + os.sep
 

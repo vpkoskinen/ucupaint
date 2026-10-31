@@ -653,6 +653,8 @@ def enable_modifiers_tree(parent, parent_tree=None, name='', is_layer=False, rea
             root_ch = yp.channels[int(match1.group(2))]
             ch = parent
             name = root_ch.name + ' ' + layer.name
+            # CUSTOM: these types have no per-layer modifier tree of their own; CUSTOM gets one
+            # like NOISE (so it is not in this set).
             if (layer.type in {'BACKGROUND', 'COLOR', 'OBJECT_INDEX'} and not ch.override) or (ch.override and ch.override_type in {'DEFAULT'}):
                 return
             parent_tree = get_tree(layer)
@@ -661,6 +663,8 @@ def enable_modifiers_tree(parent, parent_tree=None, name='', is_layer=False, rea
         elif match2:
             layer = parent
             name = layer.name
+            # CUSTOM: a custom layer's modifiers behave like NOISE's (in this set); only the
+            # generator-less IMAGE/VCOL/BACKGROUND/COLOR/GROUP/HEMI/MUSGRAVE types are skipped.
             if layer.type in {'IMAGE', 'VCOL', 'BACKGROUND', 'COLOR', 'GROUP', 'HEMI', 'MUSGRAVE'}:
                 return
             if layer.source_group != '':
@@ -744,6 +748,8 @@ def disable_modifiers_tree(parent, parent_tree=None, rearrange=False):
 
         elif match2:
             layer = parent
+            # CUSTOM: modifiers exist for a custom layer like NOISE (in this set); only the listed
+            # generator-less types are skipped.
             if layer.type in {'IMAGE', 'VCOL', 'BACKGROUND', 'COLOR', 'GROUP', 'MUSGRAVE'}:
                 return
             if layer.source_group != '':

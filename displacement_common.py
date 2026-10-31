@@ -62,12 +62,9 @@ def setup_subdiv_to_max_polys(obj, max_polys, subsurf=None):
         if level > subsurf.total_levels: 
             set_active_object(obj)
             for i in range(level - subsurf.total_levels):
-                if not is_bl_newer_than(2, 90):
-                    bpy.ops.object.multires_subdivide(modifier=subsurf.name)
-                else:
-                    if is_mesh_flat_shaded(obj.data):
-                        bpy.ops.object.multires_subdivide(modifier=subsurf.name, mode='SIMPLE')
-                    else: bpy.ops.object.multires_subdivide(modifier=subsurf.name, mode='CATMULL_CLARK')
+                if is_mesh_flat_shaded(obj.data):
+                    bpy.ops.object.multires_subdivide(modifier=subsurf.name, mode='SIMPLE')
+                else: bpy.ops.object.multires_subdivide(modifier=subsurf.name, mode='CATMULL_CLARK')
             level = subsurf.total_levels
     else:
         # Maximum subdivision is 10
@@ -194,12 +191,8 @@ def enable_displacement_setup(mat, yp=None, objs=[], thousand_polys_target=1000,
             remember_subsurf_modifiers(mat, objs)
 
     # Displacement only works with experimental feature set in Blender 2.79
-    if not is_bl_newer_than(5) and (use_adaptive_subdivision or not is_bl_newer_than(2, 80)):
+    if not is_bl_newer_than(5) and (use_adaptive_subdivision):
         scene.cycles.feature_set = 'EXPERIMENTAL'
-
-    # Legacy blender has different enum
-    if not is_bl_newer_than(2, 80) and displacement_method == 'DISPLACEMENT':
-        displacement_method = 'TRUE'
 
     # Set displacement mode
     if hasattr(mat, 'displacement_method'):
@@ -209,12 +202,6 @@ def enable_displacement_setup(mat, yp=None, objs=[], thousand_polys_target=1000,
     if hasattr(mat, 'cycles') and hasattr(mat.cycles, 'displacement_method'):
         mat.cycles.displacement_method = displacement_method
     
-    # Displacement method is inside object data for Blender 2.77 and below 
-    if not is_bl_newer_than(2, 78):
-        for obj in objs:
-            if obj.data and hasattr(obj.data, 'cycles'):
-                obj.data.cycles.displacement_method = displacement_method
-
     # Add subdivision levels
     set_subdivision_levels(objs, thousand_polys_target=thousand_polys_target)
 
@@ -243,12 +230,6 @@ def enable_displacement_setup(mat, yp=None, objs=[], thousand_polys_target=1000,
 def disable_displacement_setup(mat, yp=None, objs=[], recover_original=False, displacement_method='BUMP', delete_subdivision=False, subdiv_level=1, disable_adaptive_subdiv=True):
     if len(objs) == 0: objs = get_all_objects_with_same_materials(mat)
     if len(objs) == 0: return
-
-    # Displacement method is inside object data for Blender 2.77 and below 
-    if not is_bl_newer_than(2, 78):
-        for obj in objs:
-            if obj.data and hasattr(obj.data, 'cycles'):
-                obj.data.cycles.displacement_method = displacement_method
 
     if recover_original:
         recover_subsurf_modifiers(mat, objs)
@@ -308,7 +289,7 @@ def check_displacement_node(mat, node, set_one=False, unset_one=False, set_outsi
     if set_one or set_outside:
         
         # Set add vector node
-        if is_bl_newer_than(2, 80) and ((not disp and not vdisp) or (disp and not vdisp) or (not disp and vdisp)):
+        if ((not disp and not vdisp) or (disp and not vdisp) or (not disp and vdisp)):
             add_disp = mat.node_tree.nodes.new('ShaderNodeVectorMath')
 
             add_disp.location.x = output_mat.location.x
@@ -427,7 +408,7 @@ def check_subdiv_setup(height_ch):
     if height_ch.enable_subdiv_setup:
 
         # Displacement only works with experimental feature set in Blender 2.79
-        if not is_bl_newer_than(5) and (height_ch.subdiv_adaptive or not is_bl_newer_than(2, 80)):
+        if not is_bl_newer_than(5) and (height_ch.subdiv_adaptive):
             scene.cycles.feature_set = 'EXPERIMENTAL'
 
         if height_ch.subdiv_adaptive:
@@ -439,15 +420,7 @@ def check_subdiv_setup(height_ch):
 
         # Set cycles displacement mode
         if hasattr(mat.cycles, 'displacement_method'):
-            if is_bl_newer_than(2, 80):
-                mat.cycles.displacement_method = 'BOTH'
-            else: mat.cycles.displacement_method = 'TRUE'
-        
-        # Displacement method is inside object data for Blender 2.77 and below 
-        if not is_bl_newer_than(2, 78):
-            for obj in objs:
-                if obj.data and hasattr(obj.data, 'cycles'):
-                    obj.data.cycles.displacement_method = 'TRUE'
+            mat.cycles.displacement_method = 'BOTH'
 
         if not yp.use_baked or not yp.enable_baked_outside:
             check_displacement_node(mat, node, set_one=True)

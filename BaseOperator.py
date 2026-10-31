@@ -296,12 +296,9 @@ def draw_base_bake_target_settings(context, layout, btprops, bt=None, show_image
 
         row = split_layout(layout, factor)
         right_aligned_label(row, text='Margin:')
-        if is_bl_newer_than(3, 1):
-            split = split_layout(row, factor, align=True)
-            split.prop(btprops, 'margin', text='')
-            split.prop(btprops, 'margin_type', text='')
-        else:
-            row.prop(btprops, 'margin', text='')
+        split = split_layout(row, factor, align=True)
+        split.prop(btprops, 'margin', text='')
+        split.prop(btprops, 'margin_type', text='')
 
         layout.separator()
 
@@ -315,9 +312,8 @@ def draw_base_bake_target_settings(context, layout, btprops, bt=None, show_image
         row.label(text='')
         row.prop(btprops, 'fxaa', text='Use FXAA')
 
-        if is_bl_newer_than(2, 81) and (not bt or 
-                ((not any_height_ch or bt.height_normalize) and not any_non_clamped_ch)
-        ): 
+        if (not bt or
+                ((not any_height_ch or bt.height_normalize) and not any_non_clamped_ch)):
             row = split_layout(acol, factor)
             row.label(text='')
             #row.active = (not any_height_ch or bt.height_normalize) and not any_non_clamped_ch
@@ -335,7 +331,7 @@ def draw_base_bake_target_settings(context, layout, btprops, bt=None, show_image
 
     # Color attributes properties
 
-    if show_vcol_props and is_bl_newer_than(3, 2):
+    if show_vcol_props:
         row = split_layout(layout, factor)
 
         rcol = row.column()
@@ -360,7 +356,7 @@ def draw_base_bake_target_settings(context, layout, btprops, bt=None, show_image
         row.prop(btprops, 'bake_disabled_layers')
 
     if hasattr(btprops, 'bake_device') or hasattr(btprops, 'necessary_only'):
-        if show_image_props or (show_vcol_props and is_bl_newer_than(3, 2)) or show_general_props:
+        if show_image_props or (show_vcol_props) or show_general_props:
             layout.separator()
 
         if hasattr(btprops, 'necessary_only'):
@@ -368,7 +364,7 @@ def draw_base_bake_target_settings(context, layout, btprops, bt=None, show_image
             row.label(text='')
             row.prop(btprops, 'necessary_only', text='Only Necessary Channels')
 
-        if is_bl_newer_than(2, 80) and hasattr(btprops, 'bake_device'):
+        if hasattr(btprops, 'bake_device'):
             row = split_layout(layout, factor)
             right_aligned_label(row, 'Bake Device:')
             row.prop(btprops, 'bake_device', text='')

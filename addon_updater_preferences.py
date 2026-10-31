@@ -37,9 +37,7 @@ updater_preferences = {
 
 def add_preference_props(Preference):
     for prop_name, prop in updater_preferences.items():
-        if is_bl_newer_than(2, 80):
-            Preference.__annotations__[prop_name] = prop
-        else: setattr(Preference, prop_name, prop)
+        Preference.__annotations__[prop_name] = prop
 
 def draw_preferences(self, layout):
     if not self.developer_mode: return

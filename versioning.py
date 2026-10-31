@@ -23,9 +23,7 @@ def flip_tangent_sign():
                         for idx in poly.loop_indices:
                             vert = obj.data.loops[idx]
                             col = vc.data[i].color
-                            if is_bl_newer_than(2, 80):
-                                vc.data[i].color = (1.0-col[0], 1.0-col[1], 1.0-col[2], 1.0)
-                            else: vc.data[i].color = (1.0-col[0], 1.0-col[1], 1.0-col[2])
+                            vc.data[i].color = (1.0-col[0], 1.0-col[1], 1.0-col[2], 1.0)
                             i += 1
 
 def get_lib_revision(tree):
@@ -246,9 +244,7 @@ def create_bake_target_from_channel(ch, baked_node=None, use_vcol=False, bt_name
         bt_name = baked_image.name if baked_image else yp.id_data.name+' '+ch.name
 
         if use_vcol:
-            if is_bl_newer_than(3, 2):
-                bt_name += ' Attribute'
-            else: bt_name += ' VCol'
+            bt_name += ' Attribute'
 
     bt_name = bt_name.replace(get_addon_title()+' ', '')
     bt_name = get_unique_name(bt_name, yp.bake_targets)
@@ -789,9 +785,7 @@ def update_yp_tree(tree):
                         mat.displacement_method = 'BOTH'
 
                     if hasattr(mat.cycles, 'displacement_method'):
-                        if is_bl_newer_than(2, 80):
-                            mat.cycles.displacement_method = 'BOTH'
-                        else: mat.cycles.displacement_method = 'TRUE'
+                        mat.cycles.displacement_method = 'BOTH'
 
                     # Check if height output is connected to something
                     yp_nodes = [node for node in mat.node_tree.nodes if node.type == 'GROUP' and node.node_tree and node.node_tree.yp == yp]
@@ -881,21 +875,15 @@ def update_yp_tree(tree):
 
                 # Translation
                 if m1 or m4:
-                    if is_bl_newer_than(2, 81):
-                        new_data_path = 'nodes["' + mapping.name + '"].inputs[1].default_value'
-                    else: new_data_path = 'nodes["' + mapping.name + '"].translation'
+                    new_data_path = 'nodes["' + mapping.name + '"].inputs[1].default_value'
 
                 # Rotation
                 elif m2 or m5:
-                    if is_bl_newer_than(2, 81):
-                        new_data_path = 'nodes["' + mapping.name + '"].inputs[2].default_value'
-                    else: new_data_path = 'nodes["' + mapping.name + '"].rotation'
+                    new_data_path = 'nodes["' + mapping.name + '"].inputs[2].default_value'
 
                 # Scale
                 else: #elif m3 or m6:
-                    if is_bl_newer_than(2, 81):
-                        new_data_path = 'nodes["' + mapping.name + '"].inputs[3].default_value'
-                    else: new_data_path = 'nodes["' + mapping.name + '"].scale'
+                    new_data_path = 'nodes["' + mapping.name + '"].inputs[3].default_value'
 
                 for i, kp in enumerate(fc.keyframe_points):
 
@@ -1044,14 +1032,12 @@ def update_yp_tree(tree):
     # Version 2.2.3 use premultiplied alpha for float image atlas and new linear gamma system
     if version_tuple(yp.version) < (2, 2, 3):
 
-        if is_bl_newer_than(2, 80):
-            # Update float image atlas to use premultiplied alpha
-            for image in bpy.data.images:
-                if not image.is_float: continue
-                if image.yia.is_image_atlas or image.yua.is_udim_atlas:
-                    if not image.is_dirty and image.alpha_mode != 'PREMUL':
-                        image.alpha_mode = 'PREMUL'
-                        print("INFO: Image atlas named '"+image.name+"' is now using premultiplied alpha!")
+        for image in bpy.data.images:
+            if not image.is_float: continue
+            if image.yia.is_image_atlas or image.yua.is_udim_atlas:
+                if not image.is_dirty and image.alpha_mode != 'PREMUL':
+                    image.alpha_mode = 'PREMUL'
+                    print("INFO: Image atlas named '"+image.name+"' is now using premultiplied alpha!")
 
         if yp.use_linear_blending:
             # Non color layer used to be have linear node mistakenly added
@@ -1294,10 +1280,12 @@ def update_yp_tree(tree):
                         ch.socket_input_name = 'Value'
                     else: ch.socket_input_name = 'Color'
                 elif ch.layer_input == 'ALPHA':
-                    if is_bl_newer_than(2, 81) and layer.type == 'VORONOI':
+                    if layer.type == 'VORONOI':
                         ch.socket_input_name = 'Distance'
                     elif layer.type == 'GABOR':
                         ch.socket_input_name = 'Phase'
+                    # CUSTOM: this migration runs on old files, which predate the CUSTOM enum, so
+                    # only the historical IMAGE/VCOL alpha convention applies.
                     elif layer.type in {'IMAGE', 'VCOL'}:
                         ch.socket_input_name = 'Alpha'
                     else: ch.socket_input_name = 'Factor'
@@ -1318,7 +1306,7 @@ def update_yp_tree(tree):
                         mask.swizzle_input_mode = mask.source_input
 
                 elif mask.source_input == 'ALPHA':
-                    if is_bl_newer_than(2, 81) and mask.type == 'VORONOI':
+                    if mask.type == 'VORONOI':
                         mask.socket_input_name = 'Distance'
                     elif mask.type == 'GABOR':
                         mask.socket_input_name = 'Phase'
@@ -1585,6 +1573,8 @@ def update_yp_tree(tree):
                     swap_layer_channel_fcurves(layer, normal_ch_idx, vdm_ch_idx)
 
                 # Automatically enable new layer channel for group and background layers
+                # CUSTOM: an old file cannot contain CUSTOM (additive enum), so this migration's
+                # group/background enable rule is unaffected.
                 if layer.type in {'GROUP', 'BACKGROUND'}:
                     if hch: hch.enable = True
                     if vch: vch.enable = True
@@ -1772,7 +1762,7 @@ def update_yp_tree(tree):
     # SECTION II: Updates based on the blender version
 
     # Blender 2.92 can finally access it's vertex color alpha
-    if is_bl_newer_than(2, 92) and (is_created_before(2, 92, 0) or version_tuple(yp.blender_version) < (2, 92, 0)):
+    if (is_created_before(2, 92, 0) or version_tuple(yp.blender_version) < (2, 92, 0)):
         show_message = False
         for layer in yp.layers:
             # Update vcol layer to use alpha by reconnection
@@ -1785,7 +1775,7 @@ def update_yp_tree(tree):
             print("INFO: Now " + get_addon_title() + " is capable to use vertex paint alpha since Blender 2.92, Enjoy!")
 
     # Blender 4.1 no longer has musgrave node
-    if is_bl_newer_than(4, 1) and (is_created_before(4, 1) or version_tuple(yp.blender_version) < (4, 1, 0)):
+    if (is_created_before(4, 1) or version_tuple(yp.blender_version) < (4, 1, 0)):
         show_message = False
             
         for layer in yp.layers:
@@ -1808,7 +1798,7 @@ def update_yp_tree(tree):
     # SECTION III: Updates based on the blender version and yp version
 
     # Version 1.1.0 or Blender 2.90 hide default normal input
-    if version_tuple(yp.version) < (1, 1, 0) or (is_created_before(2, 90) and is_bl_newer_than(2, 90)) or (version_tuple(yp.version) < (3, 0, 0) and not is_bl_newer_than(2, 90)):
+    if version_tuple(yp.version) < (1, 1, 0) or (is_created_before(2, 90)):
 
         normal_root_ch = get_root_normal_channel(yp)
         if normal_root_ch:
@@ -1826,20 +1816,16 @@ def update_yp_tree(tree):
                                 inp.hide_value = True
 
     # Blender 3.4 and version 1.0.9 will make sure all mix node using the newest type
-    if version_tuple(yp.version) < (1, 0, 9) and is_bl_newer_than(3, 4):
+    if version_tuple(yp.version) < (1, 0, 9):
         print('INFO:', 'Converting old mix rgb nodes to newer ones...')
         convert_mix_nodes(tree)
 
     # Version 1.0.12 will use newer tangent process nodes in Blender 3.0 or above
-    if is_bl_newer_than(3) and (
-            version_tuple(yp.version) < (1, 0, 12) or is_created_before(3) or version_tuple(yp.blender_version) < (3, 0, 0)
-        ):
+    if (version_tuple(yp.version) < (1, 0, 12) or is_created_before(3) or version_tuple(yp.blender_version) < (3, 0, 0)):
         update_tangent_process(tree, TANGENT_PROCESS_300)
         updated_to_tangent_process_300 = True
 
     # Update tangent process from Blender 2.79 to 2.8x and 2.9x
-    if not is_bl_newer_than(3) and is_bl_newer_than(2, 80) and (is_created_before(2, 80) or version_tuple(yp.blender_version) < (2, 80, 0)):
-        update_tangent_process(tree, TANGENT_PROCESS)
 
     # Update blender version
     if version_tuple(yp.blender_version) < version_tuple(get_current_blender_version_str()):
@@ -1891,7 +1877,7 @@ def update_routine(name):
 
     # Special update for opening Blender 2.7x file
     filepath = get_addon_filepath() + "lib.blend"
-    if is_created_before(2, 80) and is_bl_newer_than(2, 80) and bpy.data.filepath != filepath:
+    if is_created_before(2, 80) and bpy.data.filepath != filepath:
 
         legacy_groups = []
         newer_groups = []
@@ -1904,7 +1890,7 @@ def update_routine(name):
                 legacy_groups.append(ng)
                 new_group_name = m.group(1)
                 # Tangent process has its own tangent process for blender 3.0 and above
-                if new_group_name == TANGENT_PROCESS and is_bl_newer_than(3):
+                if new_group_name == TANGENT_PROCESS:
                     newer_group_name = TANGENT_PROCESS_300
                 newer_group_names.append(new_group_name)
 
@@ -2005,7 +1991,7 @@ def update_routine(name):
             remove_datablock(bpy.data.node_groups, ng)
 
     # Update bake infos for Blender 2.78 or lower
-    if is_created_before(2, 79) and is_bl_newer_than(2, 79):
+    if is_created_before(2, 79):
 
         for image in bpy.data.images:
             bi = image.y_bake_info
@@ -2032,7 +2018,7 @@ def update_routine(name):
         print('INFO: Bake Info is updated to be able to point directly to object since Blender 2.79')
 
     # Dealing with new Blender 3.4 mix node and baked outside
-    if is_created_before(3, 4) and is_bl_newer_than(3, 4):
+    if is_created_before(3, 4):
         any_changes = False
         mats = get_all_materials_with_yp_nodes()
         for mat in mats:
@@ -2196,24 +2182,11 @@ def copy_lib_tree_contents(tree, lib_tree, lib_trees):
     # TODO: What if socket has different type but same name
 
     # Reorder inputs and outputs
-    if is_bl_newer_than(4):
-        for i, item in enumerate(lib_tree.interface.items_tree):
-            cur_i = [ci for ci, citem in enumerate(tree.interface.items_tree) if citem.name == item.name and citem.in_out == item.in_out][0]
-            if i != cur_i:
-                cur_item = tree.interface.items_tree[cur_i]
-                tree.interface.move(cur_item, i)
-    else:
-        # Reorder inputs
-        for i, inp in enumerate(lib_tree.inputs):
-            cur_i = [ci for ci, cinp in enumerate(tree.inputs) if cinp.name == inp.name][0]
-            if i != cur_i:
-                tree.inputs.move(cur_i, i)
-
-        # Reorder outputs
-        for i, outp in enumerate(lib_tree.outputs):
-            cur_i = [ci for ci, coutp in enumerate(tree.outputs) if coutp.name == outp.name][0]
-            if i != cur_i:
-                tree.outputs.move(cur_i, i)
+    for i, item in enumerate(lib_tree.interface.items_tree):
+        cur_i = [ci for ci, citem in enumerate(tree.interface.items_tree) if citem.name == item.name and citem.in_out == item.in_out][0]
+        if i != cur_i:
+            cur_item = tree.interface.items_tree[cur_i]
+            tree.interface.move(cur_item, i)
 
     # TODO: Check connection after reorders
 
@@ -2264,8 +2237,8 @@ def update_node_tree_libs(name):
 
     filepaths = []
     filepaths.append(get_addon_filepath() + "lib.blend")
-    if is_bl_newer_than(2, 81): filepaths.append(get_addon_filepath() + "lib_281.blend")
-    if is_bl_newer_than(2, 82): filepaths.append(get_addon_filepath() + "lib_282.blend")
+    filepaths.append(get_addon_filepath() + "lib_281.blend")
+    filepaths.append(get_addon_filepath() + "lib_282.blend")
 
     for fp in filepaths:
         if bpy.data.filepath == fp: return
@@ -2410,10 +2383,9 @@ def update_node_tree_libs(name):
         remove_datablock(bpy.data.node_groups, lib_tree)
 
     # Remove temporary libraries (Doesn't work with Blender 2.79)
-    if is_bl_newer_than(2, 80):
-        for l in reversed(bpy.data.libraries):
-            if l.filepath in filepaths:
-                bpy.data.batch_remove(ids=(l,))
+    for l in reversed(bpy.data.libraries):
+        if l.filepath in filepaths:
+            bpy.data.batch_remove(ids=(l,))
 
     print('INFO: ' + get_addon_title() + ' Node group libraries are checked in', '{:0.2f}'.format((time.time() - T) * 1000), 'ms!')
 
@@ -2492,7 +2464,7 @@ def remove_smooth_bump_setup(check_io=True):
                 if outp:
                     bsdf = get_closest_bsdf_backward(outp, ['BSDF_PRINCIPLED'])
                     if bsdf:
-                        inp = bsdf.inputs.get('Subsurface Weight') if is_bl_newer_than(4) else bsdf.inputs.get('Subsurface')
+                        inp = bsdf.inputs.get('Subsurface Weight')
                         if inp and (inp.default_value > 0.0 or len(inp.links) > 0):
                             sss_enabled = True
             

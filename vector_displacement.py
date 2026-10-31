@@ -101,7 +101,7 @@ def _prepare_bake_settings(book, obj, uv_map='', samples=1, margin=15, bake_devi
     scene.cycles.samples = samples
     scene.cycles.use_denoising = False
     scene.cycles.device = bake_device
-    scene.view_settings.view_transform = 'Standard' if is_bl_newer_than(2, 80) else 'Default'
+    scene.view_settings.view_transform = 'Standard'
     bpy.context.view_layer.material_override = None
 
     if bake_type == 'VECTOR_DISPLACEMENT':

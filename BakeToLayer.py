@@ -35,9 +35,7 @@ class YTryToSelectBakedVertexSelect(bpy.types.Operator):
         scene_objs = get_scene_objects()
         objs = []
         for bso in bi.selected_objects:
-            if is_bl_newer_than(2, 79):
-                bsoo = bso.object
-            else: bsoo = scene_objs.get(bso.object_name)
+            bsoo = bso.object
 
             if bsoo and bsoo not in objs:
                 objs.append(bsoo)
@@ -45,17 +43,13 @@ class YTryToSelectBakedVertexSelect(bpy.types.Operator):
         # Get actual selectable objects
         actual_selectable_objs = []
         for o in objs:
-            if is_bl_newer_than(2, 80):
-                layer_cols = get_object_parent_layer_collections([], bpy.context.view_layer.layer_collection, o)
+            layer_cols = get_object_parent_layer_collections([], bpy.context.view_layer.layer_collection, o)
 
-                #for lc in layer_cols:
-                #    print(lc.name)
-                
-                if layer_cols and not any([lc for lc in layer_cols if lc.exclude or lc.hide_viewport or lc.collection.hide_viewport]):
-                    actual_selectable_objs.append(o)
-            else:
-                if not o.hide_select and in_active_279_layer(o):
-                    actual_selectable_objs.append(o)
+            #for lc in layer_cols:
+            #    print(lc.name)
+
+            if layer_cols and not any([lc for lc in layer_cols if lc.exclude or lc.hide_viewport or lc.collection.hide_viewport]):
+                actual_selectable_objs.append(o)
 
         if len(actual_selectable_objs) == 0:
             self.report({'ERROR'}, "Cannot select the object!")
@@ -71,9 +65,7 @@ class YTryToSelectBakedVertexSelect(bpy.types.Operator):
         bpy.ops.mesh.select_all(action='DESELECT')
 
         for bso in bi.selected_objects:
-            if is_bl_newer_than(2, 79):
-                obj = bso.object
-            else: obj = scene_objs.get(bso.object_name)
+            obj = bso.object
 
             if not obj or obj not in actual_selectable_objs: continue
 
@@ -715,7 +707,7 @@ class YBakeToLayer(bpy.types.Operator, BaseBakeOperator):
         channel = yp.channels[int(self.channel_idx)] if self.channel_idx != '-1' else None
         height_root_ch = get_root_height_channel(yp)
 
-        show_subsurf_influence = not self.type.startswith('MULTIRES_') and (self.type not in {'SELECTED_VERTICES', 'WIREFRAME'} or (self.type == 'WIREFRAME' and is_bl_newer_than(2, 81) and not self.wireframe_triangulated))
+        show_subsurf_influence = not self.type.startswith('MULTIRES_') and (self.type not in {'SELECTED_VERTICES', 'WIREFRAME'} or (self.type == 'WIREFRAME' and not self.wireframe_triangulated))
         show_use_baked_disp = height_root_ch and not self.type.startswith('MULTIRES_') and self.type not in {'SELECTED_VERTICES'}
 
         split_val = 0.4
@@ -788,7 +780,7 @@ class YBakeToLayer(bpy.types.Operator, BaseBakeOperator):
                 row.label(text='')
                 row.prop(self, 'use_transparent_for_missing_rays')
 
-        elif self.type == 'POINTINESS' and is_bl_newer_than(2, 83):
+        elif self.type == 'POINTINESS':
             row = split_layout(lcol, split_val)
             row.label(text='')
             row.prop(self, 'normalize', text='Normalize Pointiness')
@@ -816,10 +808,9 @@ class YBakeToLayer(bpy.types.Operator, BaseBakeOperator):
             right_aligned_label(row, 'Wireframe Size:')
             row.prop(self, 'wireframe_size', text='')
 
-            if is_bl_newer_than(2, 81):
-                row = split_layout(lcol, split_val)
-                row.label(text='')
-                row.prop(self, 'wireframe_triangulated')
+            row = split_layout(lcol, split_val)
+            row.label(text='')
+            row.prop(self, 'wireframe_triangulated')
 
         elif self.type == 'CURVATURE':
             row = split_layout(lcol, split_val)
@@ -871,12 +862,9 @@ class YBakeToLayer(bpy.types.Operator, BaseBakeOperator):
 
         row = split_layout(lcol, split_val)
         right_aligned_label(row, 'Margin:')
-        if is_bl_newer_than(3, 1):
-            split = split_layout(row, 0.4, align=True)
-            split.prop(self, 'margin', text='')
-            split.prop(self, 'margin_type', text='')
-        else:
-            row.prop(self, 'margin', text='')
+        split = split_layout(row, 0.4, align=True)
+        split.prop(self, 'margin', text='')
+        split.prop(self, 'margin_type', text='')
 
         #row = split_layout(lcol, split_val)
         #right_aligned_label(row, text='Interpolation:')
@@ -900,7 +888,7 @@ class YBakeToLayer(bpy.types.Operator, BaseBakeOperator):
             row.label(text='')
             row.prop(self, 'ssaa')
 
-        if self.type in {'AO', 'THICKNESS', 'BEVEL_MASK', 'BEVEL_NORMAL'} and is_bl_newer_than(2, 81):
+        if self.type in {'AO', 'THICKNESS', 'BEVEL_MASK', 'BEVEL_NORMAL'}:
             row = split_layout(lcol, split_val)
             row.label(text='')
             row.prop(self, 'denoise')
@@ -952,7 +940,7 @@ class YBakeToLayer(bpy.types.Operator, BaseBakeOperator):
             r = row.row()
             r.prop(self, 'use_udim')
 
-        if is_bl_newer_than(2, 79) and self.type.startswith('OTHER_OBJECT_'):
+        if self.type.startswith('OTHER_OBJECT_'):
             if not sep_added:
                 lcol.separator()
                 sep_added = True
@@ -962,12 +950,11 @@ class YBakeToLayer(bpy.types.Operator, BaseBakeOperator):
             r = row.row()
             r.prop(self, 'hide_source_objects')
 
-        if is_bl_newer_than(2, 80):
-            lcol.separator()
+        lcol.separator()
 
-            row = split_layout(lcol, split_val)
-            right_aligned_label(row, 'Bake Device:')
-            row.prop(self, 'bake_device', text='')
+        row = split_layout(lcol, split_val)
+        right_aligned_label(row, 'Bake Device:')
+        row.prop(self, 'bake_device', text='')
 
         if self.type == 'CURVATURE' and self.use_udim and self.curvature_method == 'PER_PIXEL':
             lcol.separator()
@@ -1290,12 +1277,9 @@ class YBakeEntityToImage(bpy.types.Operator, BaseBakeOperator):
 
         row = split_layout(lcol, split_val)
         right_aligned_label(row, 'Margin:')
-        if is_bl_newer_than(3, 1):
-            split = split_layout(row, 0.4, align=True)
-            split.prop(self, 'margin', text='')
-            split.prop(self, 'margin_type', text='')
-        else:
-            row.prop(self, 'margin', text='')
+        split = split_layout(row, 0.4, align=True)
+        split.prop(self, 'margin', text='')
+        split.prop(self, 'margin_type', text='')
 
         lcol.separator()
 
@@ -1321,10 +1305,9 @@ class YBakeEntityToImage(bpy.types.Operator, BaseBakeOperator):
         row.label(text='')
         row.prop(self, 'fxaa')
 
-        if is_bl_newer_than(2, 81):
-            row = split_layout(lcol, split_val)
-            row.label(text='')
-            row.prop(self, 'denoise', text='Use Denoise')
+        row = split_layout(lcol, split_val)
+        row.label(text='')
+        row.prop(self, 'denoise', text='Use Denoise')
 
         # NOTE: Duplicate entity currently only available for mask
         if self.mask:
@@ -1343,11 +1326,10 @@ class YBakeEntityToImage(bpy.types.Operator, BaseBakeOperator):
         row.label(text='')
         row.prop(self, 'use_image_atlas')
 
-        if is_bl_newer_than(2, 80):
-            lcol.separator()
-            row = split_layout(lcol, split_val)
-            right_aligned_label(row, 'Bake Device:')
-            row.prop(self, 'bake_device', text='')
+        lcol.separator()
+        row = split_layout(lcol, split_val)
+        right_aligned_label(row, 'Bake Device:')
+        row.prop(self, 'bake_device', text='')
 
     def execute(self, context):
         if not self.execute_operator_prep(context): return {'CANCELLED'}
@@ -1616,9 +1598,7 @@ class YSelectAllOtherObjects(bpy.types.Operator):
             so = context.bake_info.other_objects[i]
             if so.object:
                 so_object = so.object
-                if is_bl_newer_than(2, 80):
-                    so_object.hide_viewport = False
-                else: set_object_hide(so_object, False)
+                so_object.hide_viewport = False
                 so_object.hide_render = False
                 set_object_select(so_object, True)
         if so_object:
@@ -1648,13 +1628,11 @@ class YToggleOtherObjectsVisibility(bpy.types.Operator):
         if not reference_obj:
             return {'CANCELLED'}
 
-        current_hidden_state = reference_obj.hide_viewport if is_bl_newer_than(2, 80) else get_object_hide(reference_obj)
+        current_hidden_state = reference_obj.hide_viewport
 
         for oo in bi.other_objects:
             if oo.object:
-                if is_bl_newer_than(2, 80):
-                    oo.object.hide_viewport = not current_hidden_state
-                else: set_object_hide(oo.object, not current_hidden_state)
+                oo.object.hide_viewport = not current_hidden_state
                 oo.object.hide_render = not current_hidden_state
 
         return {'FINISHED'}

@@ -65,12 +65,7 @@ def pack_float_image_27x(image):
 def pack_image(image, reload_float=False):
     T = time.time()
 
-    if is_bl_newer_than(2, 80):
-        image.pack()
-    else:
-        if image.is_float:
-            pack_float_image_27x(image)
-        else: image.pack(as_png=True)
+    image.pack()
 
     # HACK: Some operation need Float image to be reloaded to be showed correctly
     if image.is_float and reload_float:
@@ -88,14 +83,9 @@ def clean_object_references(image):
                 indices = []
                 for i, o in enumerate(segment.bake_info.selected_objects):
                     if o.object:
-                        if is_bl_newer_than(2, 80):
-                            if not any([s for s in bpy.data.scenes if o.object.name in s.collection.all_objects]):
-                                removed_references.append(o.object.name)
-                                indices.append(i)
-                        else:
-                            if not any([s for s in bpy.data.scenes if o.object.name in s.objects]):
-                                removed_references.append(o.object.name)
-                                indices.append(i)
+                        if not any([s for s in bpy.data.scenes if o.object.name in s.collection.all_objects]):
+                            removed_references.append(o.object.name)
+                            indices.append(i)
 
                 for i in reversed(indices):
                     segment.bake_info.selected_objects.remove(i)
@@ -104,14 +94,9 @@ def clean_object_references(image):
                 indices = []
                 for i, o in enumerate(segment.bake_info.other_objects):
                     if o.object:
-                        if is_bl_newer_than(2, 80):
-                            if not any([s for s in bpy.data.scenes if o.object.name in s.collection.all_objects]):
-                                removed_references.append(o.object.name)
-                                indices.append(i)
-                        else:
-                            if not any([s for s in bpy.data.scenes if o.object.name in s.objects]):
-                                removed_references.append(o.object.name)
-                                indices.append(i)
+                        if not any([s for s in bpy.data.scenes if o.object.name in s.collection.all_objects]):
+                            removed_references.append(o.object.name)
+                            indices.append(i)
 
                 for i in reversed(indices):
                     segment.bake_info.other_objects.remove(i)
@@ -124,14 +109,9 @@ def clean_object_references(image):
             indices = []
             for i, o in enumerate(image.y_bake_info.selected_objects):
                 if o.object:
-                    if is_bl_newer_than(2, 80):
-                        if not any([s for s in bpy.data.scenes if o.object.name in s.collection.all_objects]):
-                            removed_references.append(o.object.name)
-                            indices.append(i)
-                    else:
-                        if not any([s for s in bpy.data.scenes if o.object.name in s.objects]):
-                            removed_references.append(o.object.name)
-                            indices.append(i)
+                    if not any([s for s in bpy.data.scenes if o.object.name in s.collection.all_objects]):
+                        removed_references.append(o.object.name)
+                        indices.append(i)
             for i in reversed(indices):
                 image.y_bake_info.selected_objects.remove(i)
 
@@ -139,14 +119,9 @@ def clean_object_references(image):
             indices = []
             for i, o in enumerate(image.y_bake_info.other_objects):
                 if o.object:
-                    if is_bl_newer_than(2, 80):
-                        if not any([s for s in bpy.data.scenes if o.object.name in s.collection.all_objects]):
-                            removed_references.append(o.object.name)
-                            indices.append(i)
-                    else:
-                        if not any([s for s in bpy.data.scenes if o.object.name in s.objects]):
-                            removed_references.append(o.object.name)
-                            indices.append(i)
+                    if not any([s for s in bpy.data.scenes if o.object.name in s.collection.all_objects]):
+                        removed_references.append(o.object.name)
+                        indices.append(i)
             for i in reversed(indices):
                 image.y_bake_info.other_objects.remove(i)
 
@@ -196,8 +171,6 @@ def save_pack_all(yp):
 
         if image.packed_file or image.filepath == '' or force_pack:
             pack_image(image)
-            if not is_bl_newer_than(2, 80) and image.is_float:
-                packed_float_images.append(image)
         else:
             image.save()
 
@@ -208,21 +181,10 @@ def save_pack_all(yp):
 
     # HACK: For some reason active float image will glitch after auto save
     # This is only happen if active object is in texture paint mode
-    if not is_bl_newer_than(2, 80):
-        obj = bpy.context.object
-        if len(yp.layers) > 0 and obj and obj.mode == 'TEXTURE_PAINT':
-            layer = yp.layers[yp.active_layer_index]
-            if layer.type == 'IMAGE':
-                source = get_layer_source(layer)
-                image = source.image
-                if image in packed_float_images:
-                    ypui = bpy.context.window_manager.ypui
-                    ypui.refresh_image_hack = True
 
     # Clean object reference on images
-    if is_bl_newer_than(2, 79):
-        for image in images:
-            clean_object_references(image)
+    for image in images:
+        clean_object_references(image)
 
 class YCopyImagePathToClipboard(bpy.types.Operator):
     bl_idname = "wm.copy_image_path_to_clipboard"
@@ -278,23 +240,10 @@ class YInvertImage(bpy.types.Operator):
             return {'CANCELLED'}
 
         # For some reason this no longer works since Blender 2.82, but worked again in Blender 4.2
-        if not is_bl_newer_than(2, 82) or is_bl_newer_than(4, 2):
-            override = bpy.context.copy()
-            override['edit_image'] = context.image
-            if is_bl_newer_than(4):
-                with bpy.context.temp_override(**override):
-                    bpy.ops.image.invert(invert_r=True, invert_g=True, invert_b=True)
-            else: bpy.ops.image.invert(override, invert_r=True, invert_g=True, invert_b=True)
-        else:
-            ori_area_type = context.area.type
-            context.area.type = 'IMAGE_EDITOR'
-
-            space = context.area.spaces[0]
-            space.image = context.image
-                
+        override = bpy.context.copy()
+        override['edit_image'] = context.image
+        with bpy.context.temp_override(**override):
             bpy.ops.image.invert(invert_r=True, invert_g=True, invert_b=True)
-
-            context.area.type = ori_area_type
 
         return {'FINISHED'}
 
@@ -568,8 +517,7 @@ class YSaveAllBakedImages(bpy.types.Operator):
         settings = tmpscene.render.image_settings
 
         # Blender 2.80 has filmic as default color settings, change it to standard
-        if is_bl_newer_than(2, 80):
-            tmpscene.view_settings.view_transform = 'Standard'
+        tmpscene.view_settings.view_transform = 'Standard'
 
         images = []
 
@@ -668,9 +616,6 @@ class YSaveAllBakedImages(bpy.types.Operator):
             
             # Unpack image if image is packed (Only necessary for Blender 2.80 and lower)
             unpacked_to_disk = False
-            if not is_bl_newer_than(2, 81) and bpy.data.filepath != '' and image.packed_file:
-                unpacked_to_disk = True
-                default_dir, default_dir_found, default_filepath, temp_path, unpacked_path = unpack_image(image, path)
 
             # Save image
             image.save_render(path, scene=tmpscene)
@@ -690,7 +635,7 @@ class YSaveAllBakedImages(bpy.types.Operator):
                 remove_unpacked_image_path(image, path, default_dir, default_dir_found, default_filepath, temp_path, unpacked_path)
 
             # Remove packed flag
-            if is_bl_newer_than(2, 81) and image.packed_file:
+            if image.packed_file:
                 image.unpack(method='REMOVE')
 
         # Remove copied images
@@ -727,8 +672,7 @@ def get_file_format_items():
         ('TIFF', 'TIFF', '', 'IMAGE_DATA', 12)
     ]
 
-    if is_bl_newer_than(3, 2):
-        items.append(('WEBP', 'WebP', '', 'IMAGE_DATA', 13))
+    items.append(('WEBP', 'WebP', '', 'IMAGE_DATA', 13))
 
     return items
 
@@ -1024,10 +968,8 @@ class YSaveAsImage(bpy.types.Operator, ExportHelper, BaseOperator.FileSelectOpti
         # Save image
         override = bpy.context.copy()
         override['edit_image'] = image
-        if is_bl_newer_than(4):
-            with bpy.context.temp_override(**override):
-                bpy.ops.image.save_as(copy=self.copy, filepath=self.filepath, relative_path=self.relative)
-        else: bpy.ops.image.save_as(override, copy=self.copy, filepath=self.filepath, relative_path=self.relative)
+        with bpy.context.temp_override(**override):
+            bpy.ops.image.save_as(copy=self.copy, filepath=self.filepath, relative_path=self.relative)
 
         # Delete copied image
         if self.copy:

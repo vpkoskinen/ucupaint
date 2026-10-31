@@ -73,7 +73,7 @@ def create_image_atlas(color='BLACK', size=8192, hdr=False, name=''):
     #img.yia.float_buffer = hdr
 
     # Float image atlas always use premultiplied alpha
-    if hdr and is_bl_newer_than(2, 80):
+    if hdr:
         #img.colorspace_settings.name = get_noncolor_name()
         img.alpha_mode = 'PREMUL'
 
@@ -279,18 +279,11 @@ def set_segment_mapping(entity, segment, image, use_baked=False):
     else: mapping = get_mask_mapping(entity, get_baked=use_baked)
 
     if mapping:
-        if is_bl_newer_than(2, 81):
-            mapping.inputs[3].default_value[0] = scale_x
-            mapping.inputs[3].default_value[1] = scale_y
+        mapping.inputs[3].default_value[0] = scale_x
+        mapping.inputs[3].default_value[1] = scale_y
 
-            mapping.inputs[1].default_value[0] = offset_x
-            mapping.inputs[1].default_value[1] = offset_y
-        else:
-            mapping.scale[0] = scale_x
-            mapping.scale[1] = scale_y
-
-            mapping.translation[0] = offset_x
-            mapping.translation[1] = offset_y
+        mapping.inputs[1].default_value[0] = offset_x
+        mapping.inputs[1].default_value[1] = offset_y
 
 class YNewImageAtlasSegmentTest(bpy.types.Operator):
     bl_idname = "wm.y_new_image_atlas_segment_test"
@@ -659,7 +652,7 @@ class YConvertToStandardImage(bpy.types.Operator):
                     name=entities[i][0].name, width=segment.width, height=segment.height,
                     alpha=True, float_buffer=image.is_float
                 )
-                if image.is_float and is_bl_newer_than(2, 80):
+                if image.is_float:
                     new_image.alpha_mode = 'PREMUL'
             else:
                 new_image = bpy.data.images.new(

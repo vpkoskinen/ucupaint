@@ -5,7 +5,7 @@ from .common import *
 from .subtree import *
 from .node_arrangements import *
 from .node_connections import *
-from . import channel_common, lib, Modifier, Layer, layer_common, Mask, transition, Bake, BakeTarget, ListItem, BaseOperator, preview_mode, modifier_common
+from . import channel_common, lib, Modifier, Layer, layer_common, Mask, transition, Bake, BakeTarget, ListItem, BaseOperator, preview_mode, modifier_common, custom_node_common
 from .input_outputs import *
 
 YP_GROUP_SUFFIX = ' ' + get_addon_title()
@@ -133,18 +133,15 @@ class YSelectMaterialPolygons(bpy.types.Operator):
         mat = obj.active_material
         uv_name = self.uv_map if not self.new_uv else get_unique_name(self.new_uv_name, get_uv_layers(obj))
 
-        if is_bl_newer_than(2, 80):
-            objs = []
-            for o in get_scene_objects():
-                if o.type != 'MESH': continue
-                if is_layer_collection_hidden(o): continue
-                if mat.name in o.data.materials:
-                    set_object_hide(o, False)
-                    o.select_set(True)
-                    objs.append(o)
-                else: o.select_set(False)
-        else:
-            objs = [obj]
+        objs = []
+        for o in get_scene_objects():
+            if o.type != 'MESH': continue
+            if is_layer_collection_hidden(o): continue
+            if mat.name in o.data.materials:
+                set_object_hide(o, False)
+                o.select_set(True)
+                objs.append(o)
+            else: o.select_set(False)
 
         # Go to object mode
         if obj.mode != 'OBJECT': bpy.ops.object.mode_set(mode='OBJECT')
@@ -434,7 +431,7 @@ class YQuickYPaintNodeSetup(bpy.types.Operator, BaseOperator.BlendMethodOptions)
 
             rcol.separator()
 
-            if self.type == 'BSDF_PRINCIPLED' and is_bl_newer_than(2, 80):
+            if self.type == 'BSDF_PRINCIPLED':
                 rcol.prop(self, 'enable_emission', toggle=True)
 
             if self.type == 'BSDF_PRINCIPLED':
@@ -446,8 +443,7 @@ class YQuickYPaintNodeSetup(bpy.types.Operator, BaseOperator.BlendMethodOptions)
 
             rcol.prop(self, 'enable_height', toggle=True)
             rcol.prop(self, 'enable_normal', toggle=True)
-            if is_bl_newer_than(2, 80):
-                rcol.prop(self, 'enable_vector_displacement', toggle=True)
+            rcol.prop(self, 'enable_vector_displacement', toggle=True)
 
             layout.separator()
 
@@ -455,16 +451,6 @@ class YQuickYPaintNodeSetup(bpy.types.Operator, BaseOperator.BlendMethodOptions)
             row = split_layout(layout, split_val)
             row.label(text='')
             row.prop(self, 'enable_alpha', text='Enable Alpha')
-
-        if (self.enable_color or self.type == 'EMISSION') and self.enable_alpha:
-            if is_bl_newer_than(2, 80) and not is_bl_newer_than(4, 2):
-                row = split_layout(layout, split_val)
-                right_aligned_label(row, 'Blend Method:')
-                row.prop(self, 'blend_method', text='')
-
-                row = split_layout(layout, split_val)
-                right_aligned_label(row, 'Shadow Method:')
-                row.prop(self, 'shadow_method', text='')
 
         row = split_layout(layout, split_val)
         row.label(text='')
@@ -553,15 +539,11 @@ class YQuickYPaintNodeSetup(bpy.types.Operator, BaseOperator.BlendMethodOptions)
         # BSDF node
         if not main_bsdf:
             if self.type == 'BSDF_PRINCIPLED':
-                if not is_bl_newer_than(2, 79):
-                    main_bsdf = nodes.new('ShaderNodeGroup')
-                    main_bsdf.node_tree = get_node_tree_lib(lib.BL278_BSDF)
-                else:
-                    main_bsdf = nodes.new('ShaderNodeBsdfPrincipled')
-                    if 'Subsurface Radius' in main_bsdf.inputs:
-                        main_bsdf.inputs['Subsurface Radius'].default_value = (1.0, 0.2, 0.1) # Use eevee default value
-                    if 'Subsurface Color' in main_bsdf.inputs:
-                        main_bsdf.inputs['Subsurface Color'].default_value = (0.8, 0.8, 0.8, 1.0) # Use eevee default value
+                main_bsdf = nodes.new('ShaderNodeBsdfPrincipled')
+                if 'Subsurface Radius' in main_bsdf.inputs:
+                    main_bsdf.inputs['Subsurface Radius'].default_value = (1.0, 0.2, 0.1) # Use eevee default value
+                if 'Subsurface Color' in main_bsdf.inputs:
+                    main_bsdf.inputs['Subsurface Color'].default_value = (0.8, 0.8, 0.8, 1.0) # Use eevee default value
             elif self.type == 'BSDF_DIFFUSE':
                 main_bsdf = nodes.new('ShaderNodeBsdfDiffuse')
             elif self.type == 'EMISSION':
@@ -597,7 +579,7 @@ class YQuickYPaintNodeSetup(bpy.types.Operator, BaseOperator.BlendMethodOptions)
             loc.x += 200
 
         main_bsdf.location = loc.copy()
-        if main_bsdf.type == 'BSDF_PRINCIPLED' and is_bl_newer_than(2, 80):
+        if main_bsdf.type == 'BSDF_PRINCIPLED':
             loc.x += 270
         else: loc.x += 200
 
@@ -730,7 +712,6 @@ class YQuickYPaintNodeSetup(bpy.types.Operator, BaseOperator.BlendMethodOptions)
 
         if ch_alpha:
             default_value = channel_common.do_alpha_setup(mat, node, ch_alpha)
-            channel_common.set_material_methods(mat, self.blend_method, self.shadow_method)
             channel_common.set_input_default_value(node, ch_alpha, default_value)
 
         if ch_ao:
@@ -757,13 +738,11 @@ class YQuickYPaintNodeSetup(bpy.types.Operator, BaseOperator.BlendMethodOptions)
             links.new(node.outputs[ch_roughness.name], inp)
 
         if ch_emission:
-            if is_bl_newer_than(4):
-                inp = main_bsdf.inputs['Emission Color']
+            inp = main_bsdf.inputs['Emission Color']
 
-                # Set strength to one
-                sinp = main_bsdf.inputs['Emission Strength']
-                sinp.default_value = 1.0
-            else: inp = main_bsdf.inputs['Emission']
+            # Set strength to one
+            sinp = main_bsdf.inputs['Emission Strength']
+            sinp.default_value = 1.0
 
             # Check original link
             for l in inp.links:
@@ -794,9 +773,7 @@ class YQuickYPaintNodeSetup(bpy.types.Operator, BaseOperator.BlendMethodOptions)
         for area in context.screen.areas:
             if area.type == 'VIEW_3D':
                 if self.not_on_material_view and self.switch_to_material_view:
-                    if not is_bl_newer_than(2, 80):
-                        area.spaces[0].viewport_shade = 'MATERIAL'
-                    else: area.spaces[0].shading.type = 'MATERIAL'
+                    area.spaces[0].shading.type = 'MATERIAL'
 
         # Expand channels now is enabled by default if it's the only yp node
         if len([ng for ng in bpy.data.node_groups if hasattr(ng, 'yp') and ng.yp.is_ypaint_node]) == 1:
@@ -1194,14 +1171,6 @@ class YAutoSetupNewYPaintChannel(bpy.types.Operator, BaseOperator.BlendMethodOpt
         split_val = 0.4
         layout = self.layout.column()
 
-        if self.mode == 'ALPHA' and not is_bl_newer_than(4, 2):
-            row = split_layout(layout, split_val)
-            right_aligned_label(row, 'Blend Method:')
-            row.prop(self, 'blend_method', text='')
-
-            row = split_layout(layout, split_val)
-            right_aligned_label(row, 'Shadow Method:')
-            row.prop(self, 'shadow_method', text='')
 
         row = split_layout(layout, split_val)
         right_aligned_label(row, 'Channel Pair:')
@@ -1369,13 +1338,10 @@ class YNewYPaintChannel(bpy.types.Operator, BaseOperator.BlendMethodOptions):
             # Detect principled alpha
             if item.input_name == 'Alpha':
                 show_alpha_option = True
-                if is_bl_newer_than(2, 80) and not is_bl_newer_than(4, 2):
-                    show_blend_method_option = True
 
             # Blender 4.0 and above has some default weight and strength set to 0.0
-            if is_bl_newer_than(4):
-                if item.input_name in {'Emission Color', 'Subsurface Scale'}:
-                    show_strength_option = True
+            if item.input_name in {'Emission Color', 'Subsurface Scale'}:
+                show_strength_option = True
 
         split_val = 0.3
         layout = self.layout.column()
@@ -1478,16 +1444,12 @@ class YNewYPaintChannel(bpy.types.Operator, BaseOperator.BlendMethodOptions):
             mat.node_tree.links.new(node.outputs[channel.name], inp)
 
             # Blender 4.0 and above has some default weight and strength set to 0.0
-            if is_bl_newer_than(4) and target_node.type == 'BSDF_PRINCIPLED':
+            if target_node.type == 'BSDF_PRINCIPLED':
                 if item.input_name == 'Emission Color':
                     strength_inp = target_node.inputs.get('Emission Strength')
                 elif item.input_name == 'Subsurface Scale':
                     strength_inp = target_node.inputs.get('Subsurface Weight')
 
-            if (is_bl_newer_than(2, 80) and not is_bl_newer_than(4, 2) and
-                target_node.type == 'BSDF_PRINCIPLED' and item.input_name == 'Alpha'
-                ):
-                set_blend_method = True
 
         # Set input default value
         if inp and self.type != 'VECTOR': 
@@ -1523,6 +1485,8 @@ class YNewYPaintChannel(bpy.types.Operator, BaseOperator.BlendMethodOptions):
         group_tree.yp.active_channel_index = last_index
 
         # Automatically enable new layer channel for group and background layers
+        # CUSTOM: only group and background layers auto-enable a newly added channel; CUSTOM keeps
+        # the NOISE default (channel disabled until the user enables it).
         for layer in yp.layers:
             if layer.type in {'GROUP', 'BACKGROUND'}:
                 layer.channels[last_index].enable = True
@@ -1918,9 +1882,7 @@ class YSwitchToMaterialView(bpy.types.Operator):
     def execute(self, context):
         space = bpy.context.space_data
 
-        if not is_bl_newer_than(2, 80):
-            space.viewport_shade = 'MATERIAL'
-        else: space.shading.type = 'MATERIAL'
+        space.shading.type = 'MATERIAL'
 
         return {'FINISHED'}
 
@@ -2162,37 +2124,33 @@ class YChangeActiveYPaintNode(bpy.types.Operator):
 def duplicate_mat(mat, new_name=None):
     # HACK: mat.copy() on Blender 3.0 and newer will make the yp tree used by 3 users (it should be 2 users)
     # To get around this issue, use a temporary tree that will replace the yp trees before doing mat.copy()
-    if is_bl_newer_than(3):
+    yp_trees = {}
+    temp_trees = []
 
-        yp_trees = {}
-        temp_trees = []
+    # Create temporary trees that will replace the yp tree
+    for node in mat.node_tree.nodes:
+        if node.type == 'GROUP' and node.node_tree and node.node_tree.yp.is_ypaint_node:
+            yp_trees[node.name] = node.node_tree
 
-        # Create temporary trees that will replace the yp tree
-        for node in mat.node_tree.nodes:
-            if node.type == 'GROUP' and node.node_tree and node.node_tree.yp.is_ypaint_node:
-                yp_trees[node.name] = node.node_tree
+            temp_tree = node.node_tree.copy()
+            temp_trees.append(temp_tree)
 
-                temp_tree = node.node_tree.copy()
-                temp_trees.append(temp_tree)
+            node.node_tree = temp_tree
 
-                node.node_tree = temp_tree
+    # Duplicate material
+    new_mat = mat.copy()
 
-        # Duplicate material
-        new_mat = mat.copy()
+    # Set back yp tree to original nodes
+    for node_name, tree in yp_trees.items():
+        node = mat.node_tree.nodes.get(node_name)
+        node.node_tree = tree
 
-        # Set back yp tree to original nodes
-        for node_name, tree in yp_trees.items():
-            node = mat.node_tree.nodes.get(node_name)
-            node.node_tree = tree
+        node = new_mat.node_tree.nodes.get(node_name)
+        node.node_tree = tree
 
-            node = new_mat.node_tree.nodes.get(node_name)
-            node.node_tree = tree
-
-        # Remove temporary trees
-        for temp_tree in reversed(temp_trees):
-            remove_datablock(bpy.data.node_groups, temp_tree)
-    else:
-        new_mat = mat.copy()
+    # Remove temporary trees
+    for temp_tree in reversed(temp_trees):
+        remove_datablock(bpy.data.node_groups, temp_tree)
 
     if new_name:
         new_mat.name = new_name
@@ -2469,6 +2427,8 @@ class YFixMissingData(bpy.types.Operator):
         # Fix missing images
         for layer in yp.layers:
             
+            # CUSTOM: only image and vertex-colour sources carry an image to repair; a custom
+            # layer's group is not an image source (out, like NOISE).
             if layer.type in {'IMAGE' , 'VCOL'}:
                 src = get_layer_source(layer)
 
@@ -2527,9 +2487,7 @@ class YRemoveMio3Checker(bpy.types.Operator):
 
         # Switch to material view
         space = bpy.context.space_data
-        if not is_bl_newer_than(2, 80):
-            space.viewport_shade = 'MATERIAL'
-        else: space.shading.type = 'MATERIAL'
+        space.shading.type = 'MATERIAL'
 
         # Remove Mio3 modifier
         if hasattr(bpy.ops, 'mio3uv') and hasattr(bpy.ops.mio3uv, 'checker_map_cleanup'):
@@ -2627,6 +2585,13 @@ class YRemoveYPaintNode(bpy.types.Operator):
 
         if self.is_baked(yp) and not yp.enable_baked_outside:
             yp.enable_baked_outside = True
+
+        # Dummy instances live in the material trees, not in the yp tree, so remove them before the
+        # yp node (the handle `get_materials_using_yp` needs) goes away. Removing the node never
+        # touched them and left a frame of blank group instances behind.
+        for mat_using in get_materials_using_yp(yp):
+            custom_node_common.remove_custom_group_dummies_from_tree(
+                getattr(mat_using, 'node_tree', None))
 
         # Bye bye yp node
         simple_remove_node(mat.node_tree, group_node, True, True)
@@ -2752,7 +2717,7 @@ def update_active_yp_channel(self, context):
 
     # Set the active preview mode channel
     # NOTE: Will only happens for non-popover channel settings UI
-    if yp.preview_mode and (ypup.ui_non_popup_settings or not is_bl_newer_than(2, 80)):
+    if yp.preview_mode and (ypup.ui_non_popup_settings):
         yp.preview_mode_channel_index = yp.active_channel_index
 
         # Update preview mode
@@ -2776,14 +2741,12 @@ def update_active_yp_channel(self, context):
             if baked_uv_map: 
                 uv_layers.active = baked_uv_map
                 # NOTE: Blender 2.90 or lower need to use active render so the UV in image editor paint mode is updated
-                if not is_bl_newer_than(2, 91):
-                    baked_uv_map.active_render = True
 
 def update_layer_index(self, context):
     #T = time.time()
     scene = context.scene
     if hasattr(bpy.context, 'object'): obj = bpy.context.object
-    elif is_bl_newer_than(2, 80): obj = bpy.context.view_layer.objects.active
+    else: obj = bpy.context.view_layer.objects.active
     if not obj: return
     group_tree = self.id_data
     nodes = group_tree.nodes
@@ -3120,16 +3083,6 @@ def update_channel_alpha(self, context):
 
     if not self.enable_alpha:
 
-        if yp.alpha_auto_setup and not any(alpha_chs) and mat:
-
-            # Set material to use opaque (only for legacy renderer)
-            if not is_bl_newer_than(4, 2):
-                if is_bl_newer_than(2, 80):
-                    mat.blend_method = 'OPAQUE'
-                    mat.shadow_method = 'OPAQUE'
-                else:
-                    mat.game_settings.alpha_blend = 'OPAQUE'
-
         node = get_active_ypaint_node()
         inp = node.inputs.get(self.name + io_suffix['ALPHA']) if node else None
         outp = None
@@ -3175,17 +3128,7 @@ def update_channel_alpha(self, context):
 
         if yp.alpha_auto_setup and any(alpha_chs) and mat:
 
-            if is_bl_newer_than(4, 2):
-                # Settings for eevee next
-                mat.use_transparent_shadow = True
-
-            elif is_bl_newer_than(2, 80):
-                # Settings for eevee legacy
-                mat.blend_method = self.alpha_blend_mode
-                mat.shadow_method = self.alpha_shadow_mode
-            else:
-                # Set material to use alpha blend
-                mat.game_settings.alpha_blend = 'ALPHA'
+            mat.use_transparent_shadow = True
 
         # Get alpha index
         alpha_name = self.name + io_suffix['ALPHA']
@@ -3245,7 +3188,7 @@ def update_channel_alpha_blend_mode(self, context):
     group_tree = self.id_data
     yp = group_tree.yp
 
-    if not self.enable_alpha or not is_bl_newer_than(2, 80): return
+    if not self.enable_alpha: return
 
     # Set material alpha blend
     mat.blend_method = self.alpha_blend_mode
@@ -4140,9 +4083,8 @@ def ypaint_object_changes_update(scene):
                         try: 
                             obj.yp.ori_mirror_offset_u = mirror.mirror_offset_u
                             obj.yp.ori_mirror_offset_v = mirror.mirror_offset_v
-                            if is_bl_newer_than(2, 80):
-                                obj.yp.ori_offset_u = mirror.offset_u
-                                obj.yp.ori_offset_v = mirror.offset_v
+                            obj.yp.ori_offset_u = mirror.offset_u
+                            obj.yp.ori_offset_v = mirror.offset_v
                         except: print('EXCEPTIION: Cannot remember original mirror offset!')
 
                 # Set active image
@@ -4383,42 +4325,27 @@ def register():
     #bpy.types.Mesh.yp = PointerProperty(type=YPaintMeshProps)
 
     # Handlers
-    if is_bl_newer_than(2, 80):
-        # Paint slot hack is no longer necessary with Blender 5.1
-        if not is_bl_newer_than(5, 1):
-            bpy.app.handlers.depsgraph_update_post.append(ypaint_mismatch_paint_slot_hack)
-    else:
-        bpy.app.handlers.scene_update_pre.append(ypaint_object_changes_update)
-        bpy.app.handlers.scene_update_pre.append(ypaint_hacks_and_scene_updates)
+    if not is_bl_newer_than(5, 1):
+        bpy.app.handlers.depsgraph_update_post.append(ypaint_mismatch_paint_slot_hack)
 
-    if is_bl_newer_than(3, 6):
-        bpy.app.handlers.animation_playback_pre.append(ypaint_playback_preparations)
+    bpy.app.handlers.animation_playback_pre.append(ypaint_playback_preparations)
 
     bpy.app.handlers.frame_change_pre.append(ypaint_force_update_on_anim)
 
-    if is_bl_newer_than(2, 80):
-        # Msgbus Subscription
-        yp_load_msgbus_subscription(None)
-        bpy.app.handlers.load_post.append(yp_load_msgbus_subscription)
+    yp_load_msgbus_subscription(None)
+    bpy.app.handlers.load_post.append(yp_load_msgbus_subscription)
 
 def unregister():
     for cls in classes: bpy.utils.unregister_class(cls)
 
     # Remove handlers
-    if is_bl_newer_than(2, 80):
-        if not is_bl_newer_than(5, 1):
-            bpy.app.handlers.depsgraph_update_post.remove(ypaint_mismatch_paint_slot_hack)
-    else:
-        bpy.app.handlers.scene_update_pre.remove(ypaint_hacks_and_scene_updates)
-        bpy.app.handlers.scene_update_pre.remove(ypaint_object_changes_update)
+    if not is_bl_newer_than(5, 1):
+        bpy.app.handlers.depsgraph_update_post.remove(ypaint_mismatch_paint_slot_hack)
 
-    if is_bl_newer_than(3, 6):
-        bpy.app.handlers.animation_playback_pre.remove(ypaint_playback_preparations)
+    bpy.app.handlers.animation_playback_pre.remove(ypaint_playback_preparations)
 
     bpy.app.handlers.frame_change_pre.remove(ypaint_force_update_on_anim)
 
-    if is_bl_newer_than(2, 80):
-        # Remove msgbus subscription
-        bpy.msgbus.clear_by_owner(bus_owner) 
-        bpy.app.handlers.load_post.remove(yp_load_msgbus_subscription)
+    bpy.msgbus.clear_by_owner(bus_owner)
+    bpy.app.handlers.load_post.remove(yp_load_msgbus_subscription)
 

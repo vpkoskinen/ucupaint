@@ -3,7 +3,7 @@ from .common import *
 from .input_outputs import *
 from .node_arrangements import *
 from .node_connections import *
-from . import transition_common
+from . import transition_common, custom_node_common
 
 AO_MULTIPLY = 'yP AO Multiply'
 
@@ -16,9 +16,19 @@ def check_yp_channel_nodes(yp, reconnect=False):
         # Make sure the number of channels are correct
         num_difference = len(yp.channels) - len(layer.channels)
         if num_difference > 0:
+            first_new_idx = len(layer.channels)
             for i in range(num_difference):
                 # Add new channel
                 c = layer.channels.add()
+            # CUSTOM: FR-9, a root channel added later gets the default binding on this layer
+            # without touching the bindings the existing channels already have. FR-32: the
+            # starter group is never extended for it, so a channel with no same-named output
+            # reports the FR-10 fallback instead of the group silently growing a socket.
+            for i in range(first_new_idx, len(layer.channels)):
+                custom_node_common.set_custom_channel_default_binding(layer, layer.channels[i], yp.channels[i])
+                if layer.type == 'CUSTOM':
+                    layer.channels[i].custom_fallback_binding = (
+                        layer.channels[i].socket_input_name != yp.channels[i].name)
         elif num_difference < 0:
             for i in range(abs(num_difference)):
                 last_idx = len(layer.channels)-1
@@ -224,9 +234,6 @@ def set_default_height_channel_prop(channel):
     yp.halt_update = False
 
 def is_node_a_displacement(node, is_vector_disp=False):
-    if not is_bl_newer_than(2, 80):
-        if is_vector_disp: return None
-        return node.type == 'GROUP' and node.node_tree and node.node_tree.name == lib.BL27_DISP
 
     if is_vector_disp: return node.type == 'VECTOR_DISPLACEMENT'
     return node.type == 'DISPLACEMENT'
@@ -254,12 +261,11 @@ def get_closest_disp_node_backward(node, socket_name='', is_vector_disp=False):
 
 def create_vector_displacement_node(tree, connect_to=None):
     vdisp = None
-    if is_bl_newer_than(2, 80):
-        vdisp = tree.nodes.new('ShaderNodeVectorDisplacement')
+    vdisp = tree.nodes.new('ShaderNodeVectorDisplacement')
 
-        # Make sure vector displacement node has 1.0 scale
-        if 'Scale' in vdisp.inputs:
-            vdisp.inputs['Scale'].default_value = 1.0
+    # Make sure vector displacement node has 1.0 scale
+    if 'Scale' in vdisp.inputs:
+        vdisp.inputs['Scale'].default_value = 1.0
 
     if vdisp and connect_to:
         create_link(tree, vdisp.outputs[0], connect_to)
@@ -267,12 +273,7 @@ def create_vector_displacement_node(tree, connect_to=None):
     return vdisp
 
 def create_displacement_node(tree, connect_to=None):
-    if is_bl_newer_than(2, 80):
-        disp = tree.nodes.new('ShaderNodeDisplacement')
-    else:
-        # Set displacement mode
-        disp = tree.nodes.new('ShaderNodeGroup')
-        disp.node_tree = get_node_tree_lib(lib.BL27_DISP)
+    disp = tree.nodes.new('ShaderNodeDisplacement')
 
     if connect_to:
         create_link(tree, disp.outputs[0], connect_to)
@@ -494,16 +495,6 @@ def do_alpha_setup(mat, node, channel):
 
     return default_value
 
-def set_material_methods(mat, blend_method='HASHED', shadow_method='HASHED'):
-    if not is_bl_newer_than(4, 2):
-        if is_bl_newer_than(2, 80):
-            # EEVEE legacy doesn't use alpha dither by default
-            mat.blend_method = blend_method
-            mat.shadow_method = shadow_method
-        else:
-            # There's no alpha dither on legacy blender
-            mat.game_settings.alpha_blend = 'ALPHA'
-
 def add_alpha_to_color_bt(color_ch, alpha_ch):
     yp = color_ch.id_data.yp
 
@@ -703,7 +694,7 @@ def auto_setup_active_yp_new_channel(mode, channel_pair_name='', blend_method='H
     emission_inp = None
     emission_strength_inp = None
     if mode == 'EMISSION':
-        inp_name = 'Emission Color' if is_bl_newer_than(4) else 'Emission'
+        inp_name = 'Emission Color'
         strength_inp_name = 'Emission Strength'
         # Get available channel connections
         for ch in yp.channels:
@@ -783,7 +774,6 @@ def auto_setup_active_yp_new_channel(mode, channel_pair_name='', blend_method='H
         create_ao_node(mat, node, channel, shift_other_nodes=True)
     elif mode == 'ALPHA':
         make_channel_as_alpha(mat, node, channel, do_setup=True, move_index=True, ch_pair_name=channel_pair_name)
-        set_material_methods(mat, blend_method, shadow_method)
     elif mode == 'HEIGHT':
         root_normal_ch = get_root_normal_channel(yp)
         if not root_normal_ch or not root_normal_ch.use_height_as_bump:
@@ -812,6 +802,7 @@ def auto_setup_active_yp_new_channel(mode, channel_pair_name='', blend_method='H
         yp.use_baked = True
 
     # Automatically enable new layer channel for group and background layers
+    # CUSTOM: only group/background auto-enable new channels; CUSTOM follows the NOISE default.
     for layer in yp.layers:
         if layer.type in {'GROUP', 'BACKGROUND'}:
             layer.channels[yp.active_channel_index].enable = True

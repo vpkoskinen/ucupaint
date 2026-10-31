@@ -2,7 +2,7 @@ bl_info = {
     "name": "Ucupaint",
     "author": "Yusuf Umar, Agni Rakai Sahakarya, Jan Bláha, Ahmad Rifai, morirain, Patrick W. Crawford, neomonkeus, Kareem Haddad, passivestar, Przemysław Bągard",
     "version": (3, 0, 0),
-    "blender": (2, 80, 0),
+    "blender": (4, 2, 0),
     "location": "Node Editor > Properties > Ucupaint",
     "warning": "",
     "description": "Special node to manage painting layers for Cycles and Eevee materials",
@@ -18,6 +18,7 @@ def is_available(module_relpath):
 if "bpy" in locals():
     import importlib
     importlib.reload(common)
+    importlib.reload(custom_node_common)
     if 'addon_updater_preferences' in locals(): importlib.reload(addon_updater_preferences)
     if 'credits_ui' in locals(): importlib.reload(credits_ui)
     importlib.reload(preferences)
@@ -62,6 +63,7 @@ if "bpy" in locals():
     if 'psd_io' in locals(): importlib.reload(psd_io)
 else:
     from . import common
+    from . import custom_node_common
     if is_available('.addon_updater_preferences'): from . import addon_updater_preferences
     if is_available('.credits_ui'): from . import credits_ui
     from . import preferences
@@ -79,18 +81,17 @@ else:
 import bpy
 
 def register():
-    if common.is_bl_newer_than(2, 80):
-        import addon_utils
-        enabled_addons = bpy.context.preferences.addons
-        installed_addons = [m.__name__ for m in addon_utils.modules()]
+    import addon_utils
+    enabled_addons = bpy.context.preferences.addons
+    installed_addons = [m.__name__ for m in addon_utils.modules()]
 
-        # Checking other ucupaint installation
-        package_names = ['ucupaint', 'ucupaint_plus', 'bl_ext.blender_org.ucupaint', 'bl_ext.user_default.ucupaint', 'bl_ext.user_default.ucupaint_plus']
-        for pkg_name in package_names:
-            if __package__ == pkg_name: continue
-            # NOTE: Check both enabled and installed addons since Blender can mistakenly list unavailable addon
-            if pkg_name in enabled_addons and pkg_name in installed_addons:
-                raise ValueError("Another ucupaint version is installed, please disable it first.")
+    # Checking other ucupaint installation
+    package_names = ['ucupaint', 'ucupaint_plus', 'bl_ext.blender_org.ucupaint', 'bl_ext.user_default.ucupaint', 'bl_ext.user_default.ucupaint_plus']
+    for pkg_name in package_names:
+        if __package__ == pkg_name: continue
+        # NOTE: Check both enabled and installed addons since Blender can mistakenly list unavailable addon
+        if pkg_name in enabled_addons and pkg_name in installed_addons:
+            raise ValueError("Another ucupaint version is installed, please disable it first.")
 
     if 'credits_ui' in globals(): credits_ui.register()
     preferences.register()
@@ -121,6 +122,11 @@ def register():
     BakeToLayer.register()
     Root.register()
     versioning.register()
+
+    # CUSTOM: T-6b live re-sync, signature-gated so it is a cheap no-op on normal updates. The
+    # load_post entry gives a reopened file a silent cold-start repair.
+    bpy.app.handlers.depsgraph_update_post.append(custom_node_common.custom_layer_update_handler)
+    bpy.app.handlers.load_post.append(custom_node_common.custom_sync_load_post)
     if 'addon_updater_ops' in globals(): addon_updater_ops.register()
     if 'Test' in globals(): Test.register()
 
@@ -156,6 +162,11 @@ def unregister():
     BakeToLayer.unregister()
     Root.unregister()
     versioning.unregister()
+
+    # CUSTOM: remove the T-6b handlers and drop their module-level cache/error state.
+    bpy.app.handlers.depsgraph_update_post.remove(custom_node_common.custom_layer_update_handler)
+    bpy.app.handlers.load_post.remove(custom_node_common.custom_sync_load_post)
+    custom_node_common.clear_custom_sync_state()
     if 'addon_updater_ops' in globals(): addon_updater_ops.unregister()
     if 'Test' in globals(): Test.unregister()
 

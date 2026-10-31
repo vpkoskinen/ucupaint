@@ -2,21 +2,15 @@ import bpy
 from .common import *
 from .node_arrangements import *
 from .node_connections import *
-from . import ListItem, subtree, input_outputs, mask_common, lib, UDIM, ImageAtlas, Decal, modifier_common
+from . import ListItem, subtree, input_outputs, mask_common, lib, UDIM, ImageAtlas, Decal, modifier_common, custom_node_common
 
 def get_normal_map_type_items(self, context):
     items = []
 
-    if is_bl_newer_than(2, 80):
-        items.append(('BUMP_MAP', 'Bump Map', ''))
-        items.append(('NORMAL_MAP', 'Normal Map', ''))
-        items.append(('BUMP_NORMAL_MAP', 'Bump + Normal Map', ''))
-        items.append(('VECTOR_DISPLACEMENT_MAP', 'Vector Displacement Map', ''))
-    else: 
-        items.append(('BUMP_MAP', 'Bump Map', '', 'MATCAP_09', 0))
-        items.append(('NORMAL_MAP', 'Normal Map', '', 'MATCAP_23', 1))
-        items.append(('BUMP_NORMAL_MAP', 'Bump + Normal Map', '', 'MATCAP_23', 2))
-        items.append(('VECTOR_DISPLACEMENT_MAP', 'Vector Displacement Map', '', 'MATCAP_23', 3))
+    items.append(('BUMP_MAP', 'Bump Map', ''))
+    items.append(('NORMAL_MAP', 'Normal Map', ''))
+    items.append(('BUMP_NORMAL_MAP', 'Bump + Normal Map', ''))
+    items.append(('VECTOR_DISPLACEMENT_MAP', 'Vector Displacement Map', ''))
 
     return items
 
@@ -55,6 +49,13 @@ def check_layer_source(layer, tree=None, image=None, vcol=None, setup_edge_detec
 
         elif layer.type == 'AO':
             enable_eevee_ao()
+
+        elif layer.type == 'CUSTOM':
+            # CUSTOM: the source is an instance of a user-authored group. The tree is
+            # referenced, never copied (ADR-0002) — no lib lookup, no duplicate_lib_node_tree.
+            # `layer.custom_group` is the single source of truth: no group means the source node
+            # (which is still created) has no tree, which is the FR-16 fallback state.
+            source.node_tree = layer.custom_group
 
     return source
 
@@ -113,6 +114,7 @@ def add_new_layer(
         enable=True,
         use_designated_idx = False, designated_index = -1, designated_parent_idx = -1,
         add_modifier=False, modifier_type='RGB_CURVE',
+        group_name='',
     ):
 
     yp = group_tree.yp
@@ -161,6 +163,11 @@ def add_new_layer(
     layer.type = layer_type
     layer.name = get_unique_name(layer_name, yp.layers)
     layer.enable = enable
+
+    # CUSTOM: the operator's `group_name` is only an input; the layer stores the tree as a pointer
+    # (ADR-0002) so a rename and save/reopen keep the reference without an update handler (FR-15).
+    if group_name:
+        layer.custom_group = bpy.data.node_groups.get(group_name)
 
     # Set default uv name if it's an empty string
     if uv_name == '':
@@ -215,7 +222,7 @@ def add_new_layer(
     create_essential_nodes(tree, True, False, True)
 
     # Uniform Scale
-    if is_bl_newer_than(2, 81) and is_layer_using_vector(layer):
+    if is_layer_using_vector(layer):
         layer.enable_uniform_scale = ypup.enable_uniform_uv_scale_by_default
 
     # Add source
@@ -247,7 +254,7 @@ def add_new_layer(
     #texcoord = new_node(tree, layer, 'texcoord', 'NodeGroupInput', 'TexCoord Inputs')
 
     # Add mapping node
-    if is_mapping_possible(layer.type):
+    if is_mapping_possible(layer.type, layer):
         mapping = new_node(tree, layer, 'mapping', 'ShaderNodeMapping', 'Mapping')
         mapping.vector_type = 'POINT' #if segment else 'TEXTURE'
 
@@ -345,8 +352,6 @@ def add_new_layer(
 
                 for o in objs:
                     if mask_name not in get_vertex_colors(o):
-                        if not is_bl_newer_than(3, 3) and len(get_vertex_colors(o)) >= 8: continue
-
                         color = ()
                         if mask_color == 'WHITE': color = (1.0, 1.0, 1.0, 1.0) 
                         elif mask_color == 'BLACK': color = (0.0, 0.0, 0.0, 1.0)
@@ -384,6 +389,8 @@ def add_new_layer(
         root_ch = yp.channels[i]
 
         # Set some props to selected channel
+        # CUSTOM: only group/background layers force every channel enabled; CUSTOM follows the
+        # selected-channel rule below like NOISE (out of this set).
         if layer.type in {'GROUP', 'BACKGROUND'} or channel_idx == i or channel_idx == -1:
             ch.enable = True
             if root_ch.special_type == 'NORMAL':
@@ -403,6 +410,12 @@ def add_new_layer(
         if root_ch.special_type == 'VDISP':
             # Flip YZ is no longer enabled by default for faster calculation
             ch.vdisp_enable_flip_yz = False
+
+        # CUSTOM: FR-9 default binding, the same helper serves channels added later. A fresh layer's
+        # default binding is not an FR-10 fallback, so the warning flag stays clear.
+        custom_node_common.set_custom_channel_default_binding(layer, ch, root_ch)
+        if layer.type == 'CUSTOM':
+            ch.custom_fallback_binding = False
 
         # Set linear node of layer channel
         subtree.check_layer_channel_linear_node(ch, layer, root_ch)
@@ -444,11 +457,29 @@ def add_new_layer(
     # Update list items
     ListItem.refresh_list_items(yp)
 
+    # Dummy instances: a group with no instance cannot be opened in the Shader Editor, so give the
+    # new custom layer's group one unconnected instance in the material (labelled frame). Only on
+    # this creation path; loading a file never adds nodes.
+    if layer.type == 'CUSTOM':
+        custom_node_common.ensure_custom_group_dummy(layer)
+
     return layer
 
-def replace_layer_type(layer, new_type, item_name='', remove_data=False):
+def replace_layer_type(layer, new_type, item_name='', remove_data=False, group_name=''):
 
     yp = layer.id_data.yp
+
+    # CUSTOM: a custom layer is defined by the group it references, so retargeting to CUSTOM
+    # needs one. Without it the source would swap for an empty group node (FR-16's state) while
+    # the caller believes it succeeded; refuse instead. Retargeting away needs no group.
+    if new_type == 'CUSTOM' and bpy.data.node_groups.get(group_name) is None:
+        return False
+
+    # CUSTOM: re-picking the group of an already-custom layer is not a type change (FR-15/FR-16).
+    # Swap the reference in place through the one helper that clears stale input links before the
+    # tree swap, re-binds the channels and reconnects.
+    if new_type == 'CUSTOM' and layer.type == 'CUSTOM':
+        return custom_node_common.set_custom_layer_group(layer, bpy.data.node_groups.get(group_name))
 
     # Remember parents
     parent_dict = get_parent_dict(yp)
@@ -502,7 +533,8 @@ def replace_layer_type(layer, new_type, item_name='', remove_data=False):
     source = source_tree.nodes.get(layer.source)
 
     # Save source to cache
-    if layer.type not in {'BACKGROUND', 'GROUP', 'HEMI', 'EDGE_DETECT', 'AO', 'PREV_LAYERS'} and layer.type != new_type:
+    # CUSTOM: never cached — the source is a reference to a user tree, nothing per-type to keep.
+    if layer.type not in {'BACKGROUND', 'GROUP', 'HEMI', 'EDGE_DETECT', 'AO', 'PREV_LAYERS', 'CUSTOM'} and layer.type != new_type:
         setattr(layer, 'cache_' + layer.type.lower(), source.name)
         # Remove uv input link
         if any(source.inputs) and any(source.inputs[0].links):
@@ -513,7 +545,9 @@ def replace_layer_type(layer, new_type, item_name='', remove_data=False):
 
     # Try to get available cache
     cache = None
-    if new_type not in {'IMAGE', 'VCOL', 'BACKGROUND', 'GROUP', 'HEMI', 'EDGE_DETECT', 'AO', 'PREV_LAYERS'} or (new_type in {'IMAGE', 'VCOL'} and item_name == ''):
+    # CUSTOM: never cached — see the save-source set above; without this every custom
+    # layer would look up a 'cache_custom' property that does not exist.
+    if new_type not in {'IMAGE', 'VCOL', 'BACKGROUND', 'GROUP', 'HEMI', 'EDGE_DETECT', 'AO', 'PREV_LAYERS', 'CUSTOM'} or (new_type in {'IMAGE', 'VCOL'} and item_name == ''):
         cache = tree.nodes.get(getattr(layer, 'cache_' + new_type.lower()))
 
     if cache:
@@ -546,9 +580,30 @@ def replace_layer_type(layer, new_type, item_name='', remove_data=False):
         elif new_type == 'AO':
             enable_eevee_ao()
 
+        elif new_type == 'CUSTOM':
+            # CUSTOM: referenced user group, never copied (ADR-0002); no group means the empty
+            # source that FR-16 defines as the missing-group state. Re-picking the group of an
+            # already-custom layer never reaches here: it is an in-place swap (see above).
+            layer.custom_group = bpy.data.node_groups.get(group_name) if group_name else None
+            source.node_tree = layer.custom_group
+
     # Change layer type
     ori_type = layer.type
     layer.type = new_type
+
+    # CUSTOM: leaving the type drops the fallback warning and releases the group reference, so the
+    # tree can be purged when nothing else uses it (ADR-0002).
+    if ori_type == 'CUSTOM' and new_type != 'CUSTOM':
+        layer.custom_group = None
+        for ch in layer.channels:
+            ch.custom_fallback_binding = False
+
+    # CUSTOM: a fresh custom source starts from FR-9's default bindings, the same rule as a new
+    # layer, because the old type's bindings describe another source's outputs.
+    if new_type == 'CUSTOM':
+        for i, ch in enumerate(layer.channels):
+            custom_node_common.set_custom_channel_default_binding(layer, ch, yp.channels[i])
+            ch.custom_fallback_binding = False
 
     # Check modifiers tree
     modifier_common.check_layer_modifier_tree(layer)
@@ -649,13 +704,28 @@ def replace_layer_type(layer, new_type, item_name='', remove_data=False):
         reconnect_layer_nodes(lay)
         rearrange_layer_nodes(lay)
 
-    if layer.type in {'BACKGROUND', 'GROUP'} or ori_type == 'GROUP':
+    # CUSTOM: a group re-pick is not a type change, but the yp chain may need re-splicing when the
+    # old or new type is CUSTOM (the layer's usability can flip, FR-15/FR-16).
+    if layer.type in {'BACKGROUND', 'GROUP'} or ori_type in {'BACKGROUND', 'GROUP', 'CUSTOM'} or new_type == 'CUSTOM':
         reconnect_yp_nodes(layer.id_data)
         rearrange_yp_nodes(layer.id_data)
 
     # Update UI
     bpy.context.window_manager.ypui.need_update = True
+    # CUSTOM: a custom source expands like NOISE (it is not IMAGE/VCOL); only an unbaked image
+    # source stays collapsed.
     layer.expand_source = layer.type not in {'IMAGE', 'VCOL'} or (image != None and image.y_bake_info.is_baked and not image.y_bake_info.is_baked_channel)
+
+    # Dummy instances: converting into CUSTOM needs the new group's editable instance; converting
+    # away releases the group pointer above, so no layer references the old group any more and its
+    # dummy (plus the frame when empty) must be pruned. `ensure_custom_group_dummy` is a no-op for a
+    # non-CUSTOM layer, so the away case needs the explicit prune.
+    if layer.type == 'CUSTOM':
+        custom_node_common.ensure_custom_group_dummy(layer)
+    elif ori_type == 'CUSTOM':
+        custom_node_common.prune_custom_group_dummies(yp)
+
+    return True
 
 def remove_layer(yp, index, remove_on_disk=False):
     group_tree = yp.id_data
@@ -756,6 +826,10 @@ def remove_layer(yp, index, remove_on_disk=False):
     # Delete the layer
     yp.layers.remove(index)
 
+    # Dummy instances: drop the removed layer's group dummy when no remaining CUSTOM layer
+    # references it, and the frame when it becomes empty. Idempotent and never touches user nodes.
+    custom_node_common.prune_custom_group_dummies(yp)
+
 def update_driver_targets(obj, target_map):
     # Update driver target object references based on a given object map.
     for fcurve in obj.animation_data.drivers if obj.animation_data else []:
@@ -780,7 +854,7 @@ def duplicate_decal_empty_reference(texcoord_name, ttree, set_new_decal_position
             nname = get_unique_name(original_empty.name, bpy.data.objects)
             custom_collection = (
                 original_empty.users_collection[0]
-                if is_bl_newer_than(2, 80) and len(original_empty.users_collection) > 0
+                if len(original_empty.users_collection) > 0
                 else None
             )
             new_empty = original_empty.copy()

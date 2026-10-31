@@ -260,13 +260,9 @@ class VIEW3D_PT_YPaint_support_ui(bpy.types.Panel):
         row = layout.row(align=True)
         rrow = row.row(align=True)
 
-        if is_bl_newer_than(2, 80):
-            rrow.alignment = 'LEFT'
-            rrow.scale_x = 0.95
-            rrow.prop(object, prop_name, emboss=False, text=title, icon=icon)
-        else:
-            rrow.prop(object, prop_name, emboss=False, text='', icon=icon)
-            rrow.label(text=title)
+        rrow.alignment = 'LEFT'
+        rrow.scale_x = 0.95
+        rrow.prop(object, prop_name, emboss=False, text=title, icon=icon)
 
         return row
 
@@ -276,13 +272,10 @@ class VIEW3D_PT_YPaint_support_ui(bpy.types.Panel):
         row = layout.row(align=True)
         rrow = row.row(align=True)
 
-        if is_bl_newer_than(2, 80):
-            rrow.alignment = 'LEFT'
-            rrow.scale_x = 0.95
-            rrow.prop(object, prop_name, index=index_prop, emboss=False, text='', icon=icon)
-            rrow.prop(object, prop_name, index=index_prop, text=title, icon_value=lib.get_icon(icon_val, 'REC'), emboss=False)
-        else:
-            rrow.prop(object, prop_name, index=index_prop, emboss=False, text='', icon=icon)
+        rrow.alignment = 'LEFT'
+        rrow.scale_x = 0.95
+        rrow.prop(object, prop_name, index=index_prop, emboss=False, text='', icon=icon)
+        rrow.prop(object, prop_name, index=index_prop, text=title, icon_value=lib.get_icon(icon_val, 'REC'), emboss=False)
             # rrow.label(text=title)
 
         return row
@@ -991,15 +984,14 @@ def refresh_ui():
 def draw_contributors(context, layout):
 
     # Credits UI currently doesn't work with legacy blenders
-    if is_bl_newer_than(2, 80):
-        check_contributors()
+    check_contributors()
     
     ypc = context.window_manager.ypui_credits
     collaborators = get_collaborators()
     contributors = collaborators.contributors
     member_count = len(contributors)
 
-    if is_bl_newer_than(2, 80) and is_online() and member_count > 0:
+    if is_online() and member_count > 0:
 
         row_title = layout.row(align=True)
         row_title_label = row_title.row(align=True)
@@ -1009,8 +1001,6 @@ def draw_contributors(context, layout):
         paging_layout = row_title.row(align=True)
         paging_layout.alignment = 'RIGHT'
         # NOTE: HACK: Older blender need paging scale_x to avoid the label from being cut
-        if not is_bl_newer_than(3):
-            paging_layout.scale_x = 0.95
 
         cont_setting = collaborators.contributor_settings
 
@@ -1060,7 +1050,7 @@ def draw_contributors(context, layout):
 def draw_contributor_status(context, layout, add_separator=False):
     ypc = context.window_manager.ypui_credits
 
-    if is_online() and is_bl_newer_than(2, 80):
+    if is_online():
         if add_separator:
             layout.separator()     
         if ypc.connection_status == "FAILED":
@@ -1090,12 +1080,10 @@ credits_preferences = {
 
 def add_preference_props(Preference):
     for prop_name, prop in credits_preferences.items():
-        if is_bl_newer_than(2, 80):
-            Preference.__annotations__[prop_name] = prop
-        else: setattr(Preference, prop_name, prop)
+        Preference.__annotations__[prop_name] = prop
 
 def draw_preferences(self, layout):
-    if self.developer_mode and is_bl_newer_than(2, 80):
+    if self.developer_mode:
         box = layout.box()
         box.prop(self, 'debug_credits')
 
@@ -1154,10 +1142,9 @@ def register():
     ui_sp = bpy.context.window_manager.ypui_credits
     ui_sp.initialized = False
 
-    if is_bl_newer_than(2, 80):
-        check_contributors()
+    check_contributors()
 
-        bpy.app.handlers.load_post.append(check_contributors_on_load)
+    bpy.app.handlers.load_post.append(check_contributors_on_load)
 
 def unregister():
     for cls in classes: bpy.utils.unregister_class(cls)
@@ -1169,5 +1156,4 @@ def unregister():
     bpy.utils.previews.remove(previews_users)
     previews_users = None
 
-    if is_bl_newer_than(2, 80):
-        bpy.app.handlers.load_post.remove(check_contributors_on_load)
+    bpy.app.handlers.load_post.remove(check_contributors_on_load)

@@ -1,7 +1,7 @@
 import bpy, time, re, os, random, numpy
 from bpy.props import *
 from bpy_extras.io_utils import ImportHelper
-from . import Modifier, lib, Mask, transition, ImageAtlas, UDIM, NormalMapModifier, ListItem, BaseOperator, Decal, channel_common, layer_common, modifier_common
+from . import Modifier, lib, Mask, transition, ImageAtlas, UDIM, NormalMapModifier, ListItem, BaseOperator, Decal, channel_common, layer_common, modifier_common, custom_node_common
 from .common import *
 #from . import bake_common
 from .node_arrangements import *
@@ -10,9 +10,7 @@ from .subtree import *
 from .input_outputs import *
 
 DEFAULT_NEW_IMG_SUFFIX = ' Layer'
-if not is_bl_newer_than(3, 2):
-    DEFAULT_NEW_VCOL_SUFFIX = ' VCol'
-else: DEFAULT_NEW_VCOL_SUFFIX = ' Attribute'
+DEFAULT_NEW_VCOL_SUFFIX = ' Attribute'
 DEFAULT_NEW_VDM_SUFFIX = ' VDM'
 
 TEMP_TREE_PREFIX = '____TEMP__'
@@ -125,18 +123,16 @@ class YNewVcolAsLayerChannelSource(bpy.types.Operator):
         col = row.column()
         col.label(text='Name:')
 
-        if is_bl_newer_than(3, 2):
-            col.label(text='Domain:')
-            col.label(text='Data Type:')
+        col.label(text='Domain:')
+        col.label(text='Data Type:')
 
         col = row.column()
         col.prop(self, 'name', text='')
 
-        if is_bl_newer_than(3, 2):
-            crow = col.row(align=True)
-            crow.prop(self, 'domain', expand=True)
-            crow = col.row(align=True)
-            crow.prop(self, 'data_type', expand=True)
+        crow = col.row(align=True)
+        crow.prop(self, 'domain', expand=True)
+        crow = col.row(align=True)
+        crow.prop(self, 'data_type', expand=True)
 
     def execute(self, context):
 
@@ -176,7 +172,6 @@ class YNewVcolAsLayerChannelSource(bpy.types.Operator):
 
         for o in objs:
             if self.name not in get_vertex_colors(o):
-                if not is_bl_newer_than(3, 3) and len(get_vertex_colors(o)) >= 8: continue
                 vcol = new_vertex_color(o, self.name, self.data_type, self.domain, color_fill=(1.0, 1.0, 1.0, 1.0))
                 set_active_vertex_color(o, vcol)
 
@@ -459,6 +454,21 @@ class YNewLayer(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     name : StringProperty(name='Layer Name', default='')
+
+    # For custom node layer
+    group_name : StringProperty(
+        name = 'Group Name',
+        description = 'Name of the node group used as a custom node layer source',
+        default = ''
+    )
+
+    # FR-31: create a starter group instead of picking an existing one. The menu offers both in
+    # the same place; either is scriptable.
+    create_new_group : BoolProperty(
+        name = 'Create New Group',
+        description = 'Generate a starter node group wired to the current channels',
+        default = False
+    )
 
     type : EnumProperty(
         name = 'Layer Type',
@@ -874,7 +884,12 @@ class YNewLayer(bpy.types.Operator):
         if self.type == 'IMAGE':
             self.name = get_unique_name(self.name, yp.layers)
 
-        # Make sure decal is off when adding non mappable layer
+        # Make sure decal is off when adding non mappable layer.
+        # No entity is passed: at invoke time no layer exists yet, and `self` is the operator
+        # (`id_data` is the WindowManager), not a layer. CUSTOM answers "no mapping" here because
+        # the answer lives in the not-yet-created layer's group; `add_new_layer` re-checks against
+        # the real layer in `execute`, which is what decides the mapping node and the final
+        # texcoord. Every non-CUSTOM type ignores the entity argument, so nothing changes for them.
         if not is_mapping_possible(self.type) and self.texcoord_type == 'Decal':
             self.texcoord_type = 'UV'
             self.mask_texcoord_type = 'UV'
@@ -1019,7 +1034,7 @@ class YNewLayer(bpy.types.Operator):
             right_aligned_label(row, text='Color:')
             row.prop(self, 'solid_color', text='')
 
-        if self.type == 'VCOL' and is_bl_newer_than(3, 2):
+        if self.type == 'VCOL':
             row = split_layout(layout, split_val)
             right_aligned_label(row, 'Domain:')
             crow = row.row(align=True)
@@ -1161,7 +1176,7 @@ class YNewLayer(bpy.types.Operator):
                         row.label(text='')
                         row.prop(self, 'use_image_atlas_for_mask', text='Use Image Atlas')
 
-                elif is_bl_newer_than(3, 2) and self.mask_type == 'VCOL':
+                elif self.mask_type == 'VCOL':
 
                     row = split_layout(layout, split_val)
                     right_aligned_label(row, 'Mask Domain:')
@@ -1210,17 +1225,6 @@ class YNewLayer(bpy.types.Operator):
             self.report({'ERROR'}, get_vertex_color_label(10)+" only works with mesh object!")
             return {'CANCELLED'}
 
-        if (not is_bl_newer_than(3, 3) and
-                (
-                ((self.type == 'VCOL' or (self.add_mask and self.mask_type == 'VCOL')) 
-                and len(vcol_names) >= 8) 
-            or
-                ((self.type == 'VCOL' and (self.add_mask and self.mask_type == 'VCOL')) 
-                and len(vcol_names) >= 7)
-                )
-            ):
-            self.report({'ERROR'}, "Mesh can only use 8 "+get_vertex_color_label(00)+"!")
-            return {'CANCELLED'}
 
         # Check if layer with same name is already available
         if self.type == 'IMAGE':
@@ -1238,9 +1242,6 @@ class YNewLayer(bpy.types.Operator):
             return {'CANCELLED'}
 
         # Edge Detect mask is only possible in Blender 2.93 or above
-        if not is_bl_newer_than(2, 93) and (self.type in {'EDGE_DETECT', 'AO'} or self.add_mask and self.mask_type == 'EDGE_DETECT'):
-            self.report({'ERROR'}, "Realtime layer/mask mask is only supported in Blender 2.93 or above!")
-            return {'CANCELLED'}
 
         # Clearing unused image atlas segments
         img_atlas = self.get_to_be_cleared_image_atlas(context, yp)
@@ -1302,7 +1303,7 @@ class YNewLayer(bpy.types.Operator):
                         img.use_alpha = True
 
                 # Set alpha mode to premultiplied to make sure alpha will be packed correctly
-                if img.is_float and is_bl_newer_than(2, 80):
+                if img.is_float:
                     img.alpha_mode = 'PREMUL'
 
                 # Set colorspace
@@ -1322,14 +1323,22 @@ class YNewLayer(bpy.types.Operator):
 
             for o in objs:
                 if self.name not in get_vertex_colors(o):
-                    if not is_bl_newer_than(3, 3) and len(get_vertex_colors(o)) >= 8: continue
 
                     color = (0.0, 0.0, 0.0, 0.0)
-                    if not is_bl_newer_than(2, 92):
-                        color = (1.0, 1.0, 1.0, 1.0)
 
                     vcol = new_vertex_color(o, self.name, self.vcol_data_type, self.vcol_domain, color_fill=color)
                     set_active_vertex_color(o, vcol)
+
+        # FR-31: a starter group is generated once, before the layer exists, and then used exactly
+        # like a picked group. `group_name` names it when given (so scripts can predict the name);
+        # otherwise the layer name is used.
+        group_name = self.group_name
+        if self.type == 'CUSTOM' and self.create_new_group:
+            starter = custom_node_common.create_starter_group(yp, self.group_name or self.name)
+            if starter is not None: group_name = starter.name
+        if not self.name and self.type == 'CUSTOM':
+            # `add_new_layer` needs a non-empty layer name; scripted starter-group calls may omit it.
+            self.name = group_name or layer_type_labels[self.type]
 
         yp.halt_update = True
 
@@ -1352,7 +1361,8 @@ class YNewLayer(bpy.types.Operator):
             mask_use_prev_normal=self.mask_use_prev_normal, ao_distance=self.ao_distance, normal_space=self.normal_space,
             height_blend_type = self.height_blend_type,
             add_modifier = self.type == 'PREV_LAYERS',
-            modifier_type = self.modifier_type
+            modifier_type = self.modifier_type,
+            group_name = group_name
         )
 
         if segment:
@@ -2123,7 +2133,7 @@ class YOpenImagesFromMaterialAsLayer(bpy.types.Operator, ImportHelper, BaseMulti
 
         # If not found get from the asset library
         from_asset_library = self.asset_library_path != ''
-        if not mat and from_asset_library and is_bl_newer_than(3):
+        if not mat and from_asset_library:
             with bpy.data.libraries.load(str(self.asset_library_path), assets_only=True) as (data_from, data_to):
                 for mat in data_from.materials:
                     if mat == self.mat_name:
@@ -2293,7 +2303,7 @@ class YOpenLayersFromMaterial(bpy.types.Operator):
 
         # If not found get from the asset library
         from_asset_library = self.asset_library_path != ''
-        if not mat and from_asset_library and is_bl_newer_than(3):
+        if not mat and from_asset_library:
             with bpy.data.libraries.load(str(self.asset_library_path), assets_only=True) as (data_from, data_to):
                 for mat_name in data_from.materials:
                     if mat_name == self.mat_name:
@@ -2597,7 +2607,7 @@ class YOpenImageAsLayer(bpy.types.Operator, ImportHelper, BaseOperator.OpenImage
                     layered_image_found = True
                     break
         
-        if layered_image_found and is_bl_newer_than(2, 80):
+        if layered_image_found:
             psd_io = get_package_module('.psd_io')
             if ext == 'psd':
                 layout.prop(self, 'read_layers', text='Read Photoshop Layers')
@@ -2973,7 +2983,6 @@ class YOpenExistingDataAsLayerChannelSource(bpy.types.Operator):
 
             for o in objs:
                 if self.vcol_name not in get_vertex_colors(o):
-                    if not is_bl_newer_than(3, 3) and len(get_vertex_colors(o)) >= 8: continue
                     data_type, domain = get_vcol_data_type_and_domain_by_name(o, self.vcol_name, objs)
                     other_v = new_vertex_color(o, self.vcol_name, data_type, domain, color_fill=(0.0, 0.0, 0.0, 1.0))
                     set_active_vertex_color(o, other_v)
@@ -3208,12 +3217,9 @@ class YOpenExistingDataAsLayer(bpy.types.Operator):
 
             for o in objs:
                 if self.vcol_name not in get_vertex_colors(o):
-                    if not is_bl_newer_than(3, 3) and len(get_vertex_colors(o)) >= 8: continue
                     data_type, domain = get_vcol_data_type_and_domain_by_name(o, self.vcol_name, objs)
 
                     color = (0.0, 0.0, 0.0, 0.0)
-                    if not is_bl_newer_than(2, 92):
-                        color = (0.0, 0.0, 0.0, 1.0)
                     other_v = new_vertex_color(o, self.vcol_name, data_type, domain, color_fill=color)
 
                     set_active_vertex_color(o, other_v)
@@ -3647,9 +3653,6 @@ class YRemoveLayer(bpy.types.Operator):
         # Remove on disk is dangerous so it's always disabled by default
         self.remove_on_disk = False
 
-        # Blender 2.7x has no global undo between modes
-        self.legacy_on_non_object_mode = not is_bl_newer_than(2, 80) and context.object.mode != 'OBJECT'
-
         # Check if there's any dirty images
         self.any_dirty_images = any_dirty_images_inside_layer(layer)
 
@@ -3657,13 +3660,13 @@ class YRemoveLayer(bpy.types.Operator):
         self.any_udim_atlas = any(get_layer_images(layer, udim_atlas_only=True))
 
         # Only allow to remove files on disk with a confirmation popup
-        if get_user_preferences().skip_property_popups and not event.shift and not self.any_dirty_images and not self.legacy_on_non_object_mode and not self.any_udim_atlas:
+        if get_user_preferences().skip_property_popups and not event.shift and not self.any_dirty_images and not self.any_udim_atlas:
             return self.execute(context)
 
         # Check if there's ondisk image
         self.any_images_on_disk = any_single_user_ondisk_image_inside_layer(layer)
 
-        if self.any_images_on_disk or self.legacy_on_non_object_mode or self.any_dirty_images or self.any_udim_atlas:
+        if self.any_images_on_disk or self.any_dirty_images or self.any_udim_atlas:
             return context.window_manager.invoke_props_dialog(self, width=300)
         return self.execute(context)
 
@@ -3671,10 +3674,7 @@ class YRemoveLayer(bpy.types.Operator):
 
         col = self.layout.column(align=True)
 
-        if self.legacy_on_non_object_mode:
-            col.label(text='You cannot UNDO this operation in this mode.', icon='ERROR')
-            col.label(text="Are you sure you want to continue?", icon='BLANK1')
-        elif self.any_dirty_images:
+        if self.any_dirty_images:
             col.label(text="Unsaved data will be LOST if you UNDO this operation.", icon='ERROR')
             col.label(text="Are you sure you want to continue?", icon='BLANK1')
         elif self.any_udim_atlas:
@@ -3915,6 +3915,10 @@ class YSetLayerChannelInput(bpy.types.Operator):
             else:
                 ch.override = True
                 ch.override_type = 'DEFAULT'
+                # CUSTOM: the override replaces the group output, so an FR-10 fallback flag left
+                # over from the group binding would warn about a binding the channel no longer uses.
+                if layer.type == 'CUSTOM':
+                    ch.custom_fallback_binding = False
             if not ch.enable: ch.enable = True
         else:
             if self.set_normal_input:
@@ -3923,6 +3927,9 @@ class YSetLayerChannelInput(bpy.types.Operator):
             else:
                 ch.override = False
                 ch.socket_input_name = self.socket_name
+                # CUSTOM: an explicit choice through this menu acknowledges the FR-10 fallback.
+                if layer.type == 'CUSTOM':
+                    ch.custom_fallback_binding = False
 
         # Update list items
         ListItem.refresh_list_items(ch.id_data.yp, repoint_active=True)
@@ -3981,6 +3988,30 @@ class YReplaceLayerType(bpy.types.Operator):
     item_name : StringProperty(name="Item")
     item_coll : CollectionProperty(type=BaseOperator.YPropertyGroup)
 
+    # For custom node layer
+    group_name : StringProperty(
+        name = 'Group Name',
+        description = 'Name of the node group used as a custom node layer source',
+        default = ''
+    )
+
+    # FR-31: the same starter-group path as `wm.y_new_layer`, used when replacing a layer's source.
+    create_new_group : BoolProperty(
+        name = 'Create New Group',
+        description = 'Generate a starter node group wired to the current channels',
+        default = False
+    )
+
+    # Lets a script name the target layer: without it the operator could only be run from the
+    # layer panel, where invoke() captures context.layer. When set it takes precedence over the
+    # active layer, so `wm.y_replace_layer_type(type='CUSTOM', group_name='G', layer_name='L')`
+    # works from a script. Empty means "use context.layer / the active layer" as before.
+    layer_name : StringProperty(
+        name = 'Layer Name',
+        description = 'Name of the layer whose source is replaced (empty: the active layer)',
+        default = ''
+    )
+
     load_item : BoolProperty(default=False)
 
     @classmethod
@@ -3988,10 +4019,34 @@ class YReplaceLayerType(bpy.types.Operator):
         group_node = get_active_ypaint_node()
         return context.object and group_node and len(group_node.node_tree.yp.layers) > 0
 
+    def get_layer(self, context):
+        # The layer to operate on: an explicit scripted layer_name, then the one invoke() captured
+        # from the panel, then the click's active layer, then the yp's active layer. None means
+        # the operator cannot run.
+        if self.layer_name:
+            node = get_active_ypaint_node()
+            if node is not None:
+                layer = node.node_tree.yp.layers.get(self.layer_name)
+                if layer is not None: return layer
+
+        layer = getattr(self, 'layer', None)
+        if layer is not None: return layer
+
+        if hasattr(context, 'layer') and context.layer is not None: return context.layer
+
+        node = get_active_ypaint_node()
+        if node is None: return None
+        yp = node.node_tree.yp
+
+        if yp.active_layer_index >= 0 and yp.active_layer_index < len(yp.layers):
+            return yp.layers[yp.active_layer_index]
+
+        return None
+
     def invoke(self, context, event):
         obj = context.object
-        self.layer = context.layer
-        if self.load_item and self.type in {'IMAGE', 'VCOL'}:
+        self.layer = self.get_layer(context)
+        if self.load_item and self.type in {'IMAGE', 'VCOL'} and self.layer is not None:
 
             self.item_coll.clear()
             self.item_name = ''
@@ -4029,10 +4084,24 @@ class YReplaceLayerType(bpy.types.Operator):
         T = time.time()
 
         wm = context.window_manager
-        layer = self.layer
+        layer = self.get_layer(context)
+        if layer is None:
+            self.report({'ERROR'}, "No layer is selected!")
+            return {'CANCELLED'}
         yp = layer.id_data.yp
 
-        if self.type == layer.type and self.type not in {'IMAGE', 'VCOL'}: return {'CANCELLED'}
+        # FR-31: generate a starter group before the same-type guard, so replacing a CUSTOM layer
+        # with "generate starter" is a real change (a new group) rather than a swallowed repick.
+        if self.type == 'CUSTOM' and self.create_new_group:
+            starter = custom_node_common.create_starter_group(yp, self.group_name or (layer.name + ' Group'))
+            if starter is not None: self.group_name = starter.name
+
+        # CUSTOM: re-picking the group of an existing custom layer is a real change (FR-15/FR-16),
+        # so the same-type guard must not swallow it; the picker always sends a group name. Every
+        # other same-type click stays a no-op.
+        custom_repick = self.type == 'CUSTOM' and self.group_name != ''
+        if self.type == layer.type and self.type not in {'IMAGE', 'VCOL'} and not custom_repick:
+            return {'CANCELLED'}
         #if layer.type == 'GROUP':
         #    self.report({'ERROR'}, "You can't change type of group layer!")
         #    return {'CANCELLED'}
@@ -4041,13 +4110,19 @@ class YReplaceLayerType(bpy.types.Operator):
             self.report({'ERROR'}, "Form is cannot be empty!")
             return {'CANCELLED'}
 
-        layer_common.replace_layer_type(self.layer, self.type, self.item_name)
+        if not layer_common.replace_layer_type(layer, self.type, self.item_name, group_name=self.group_name):
+            self.report({'ERROR'}, "A custom layer needs an existing node group!")
+            return {'CANCELLED'}
 
         print('INFO: Layer', layer.name, 'is updated in', '{:0.2f}'.format((time.time() - T) * 1000), 'ms!')
         wm.yptimer.time = str(time.time())
 
         return {'FINISHED'}
 
+# FR-17: Duplicate Layer copies the layer and its layer tree, never the referenced group tree.
+# `copy_id_props` carries `custom_group` as a pointer and `duplicate_layer_nodes_and_images` keeps
+# the source node's `node_tree`, so both layers keep one shared datablock. Make Unique is the
+# explicit deep copy and belongs to T-10; do not make this path copy the group.
 class YDuplicateLayer(bpy.types.Operator):
     bl_idname = "wm.y_duplicate_layer"
     bl_label = "Duplicate layer"
@@ -4278,6 +4353,11 @@ class YCopyLayer(bpy.types.Operator):
         return {'FINISHED'}
 
 def copy_layers(yp_source, yp_dest, layer_name='', packed_duplicate=True, paste_blank=False, ondisk_duplicate=False, set_new_decal_position=False, rebake_bakeds=True):
+    # FR-17: `copy_id_props` carries `custom_group` as a pointer and the source node keeps the
+    # referenced tree; only `duplicate_layer_nodes_and_images` copies the *layer* tree. Make
+    # Unique (the explicit deep copy of the group) arrives in T-10 — do not add it here.
+    from . import custom_node_common
+
     message = ''
 
     yp = yp_dest
@@ -4353,6 +4433,10 @@ def copy_layers(yp_source, yp_dest, layer_name='', packed_duplicate=True, paste_
 
         ls = yp_source.layers.get(lname)
 
+        # FR-9 bindings for channels with no same-named source channel are applied after the
+        # pasted layer's group node exists; see the `new_node` call below.
+        pending_custom_bindings = []
+
         # Create new layer
         new_layer = yp.layers.add()
         new_layer.name = get_unique_name(ls.name, yp.layers)
@@ -4373,6 +4457,8 @@ def copy_layers(yp_source, yp_dest, layer_name='', packed_duplicate=True, paste_
 
                 # New layer channel
                 new_ch = new_layer.channels.add()
+                # CUSTOM: a new layer's channels default disabled except group/background; CUSTOM
+                # keeps the NOISE default (disabled until the FR-9 binding enables it).
                 new_ch.enable = new_layer.type in {'GROUP', 'BACKGROUND'} # Layer channel default is disabled except for group and background
 
                 # Get matching channel on source yp
@@ -4383,6 +4469,14 @@ def copy_layers(yp_source, yp_dest, layer_name='', packed_duplicate=True, paste_
                 # Copy layer channel props
                 if source_idx != -1:
                     copy_id_props(ls.channels[source_idx], new_ch)
+                elif new_layer.type == 'CUSTOM':
+                    # CUSTOM: a destination root channel with no same-named source channel still
+                    # gets FR-9's default binding (same name, else first compatible output), so a
+                    # pasted layer's binding is defined rather than an untouched property default.
+                    # A copy is not the FR-10 automatic fallback, so the warning flag stays clear.
+                    # The helper resolves the binding through the layer's group node/source, which
+                    # `new_node` creates after this loop, so defer it to `pending_custom_bindings`.
+                    pending_custom_bindings.append((len(new_layer.channels) - 1, root_ch.name))
 
                 for i, mask in enumerate(new_layer.masks):
 
@@ -4401,6 +4495,22 @@ def copy_layers(yp_source, yp_dest, layer_name='', packed_duplicate=True, paste_
         # Duplicate groups
         new_group_node = new_node(tree, new_layer, 'group_node', 'ShaderNodeGroup', new_layer.name)
         new_group_node.node_tree = get_tree(ls)
+
+        # FR-9 default bindings deferred from the channel loop: the helper looks the source up
+        # through the pasted layer's group node, which only exists now. Doing it here keeps the
+        # binding valid (and out of the FR-10 fallback) before the reconnect pass below.
+        for ch_index, root_name in pending_custom_bindings:
+            root_ch = yp.channels.get(root_name)
+            if root_ch is None: continue
+            new_ch = new_layer.channels[ch_index]
+            custom_node_common.set_custom_channel_default_binding(new_layer, new_ch, root_ch)
+            new_ch.custom_fallback_binding = False
+
+        # Dummy instances: the destination material must get its own editable instance of the
+        # pasted group, at the same point the FR-9 bindings are applied (the group node/source now
+        # exists). The source material's dummy is independent and stays untouched.
+        if new_layer.type == 'CUSTOM':
+            custom_node_common.ensure_custom_group_dummy(new_layer)
 
         # Duplicate group input values
         source_node = tree_source.nodes.get(ls.group_node)
@@ -4470,7 +4580,7 @@ def copy_layers(yp_source, yp_dest, layer_name='', packed_duplicate=True, paste_
 
     # Rebake baked images
     # NOTE: Blender versions lower than 2.80 don't copy image's bake info, making rebake process useless
-    if rebake_bakeds and is_bl_newer_than(2, 80):
+    if rebake_bakeds:
         T = time.time()
 
         # NOTE: Calling rebake function directly is not possible yet due to cyclic file imports
@@ -4598,7 +4708,7 @@ class YPasteLayer(bpy.types.Operator):
         if self.any_decal:
             self.layout.prop(self, 'set_new_decal_position')
 
-        if self.any_baked and is_bl_newer_than(2, 80):
+        if self.any_baked:
             self.layout.prop(self, 'rebake_bakeds')
 
             if self.rebake_bakeds:
@@ -5357,6 +5467,13 @@ class YLayerChannel(bpy.types.PropertyGroup):
         description = 'Socket name for layer channel input',
         default = 'Color',
         update = update_layer_input
+    )
+
+    custom_fallback_binding : BoolProperty(
+        name = 'Custom Fallback Binding',
+        description = 'Set when a custom layer channel was automatically re-pointed after its '
+                    'group output changed; the channel keeps warning until the binding is re-chosen',
+        default = False,
     )
 
     socket_input_1_name : StringProperty(
@@ -6242,6 +6359,12 @@ class YLayer(bpy.types.PropertyGroup, Decal.BaseDecal):
     source_w : StringProperty(default='')
     source_group : StringProperty(default='')
     baked_source : StringProperty(default='')
+
+    # CUSTOM: the user group the layer's source points at. A data-block pointer, not a name, so a
+    # rename and a save/reopen keep the reference without an update handler (FR-15, ADR-0002).
+    # None means the group is missing or the layer is not CUSTOM; the source node still exists and
+    # the layer falls through like a disabled one (FR-16).
+    custom_group : PointerProperty(type=bpy.types.NodeTree)
 
     source_temp : StringProperty(default='')
 
